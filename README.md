@@ -18,4 +18,4 @@ make clean && make
 Debug/dehazing -h
 ```
 
-**Developed by Yichen Liu and Yin Lin**
+**Forked from https://github.com/arsenalliu123/dehazing-GPU**
