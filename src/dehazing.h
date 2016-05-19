@@ -1,15 +1,10 @@
-/*
- * dehazing.h
- *
- *  Created on: Apr 8, 2015
- *      Author: river
- */
-
 #ifndef DEHAZING_H_
 #define DEHAZING_H_
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <boost/current_function.hpp>
+#include <boost/timer/timer.hpp>
 
 #define CUDA_CHECK_RETURN(value) {											\
 	cudaError_t _m_cudaStat = value;										\
@@ -19,7 +14,9 @@
 		exit(1);															\
 	} }
 
+#define SETUP_TIMER std::cout << __FUNCTION__ << std::endl; boost::timer::auto_cpu_timer boostTimer;
 #define CEIL(X) ((X-(int)(X)) > 0 ? (int)(X+1) : (int)(X))
+#define BLOCK_DIM 32
 
 //dark channel prior
 void dark_channel(
@@ -70,6 +67,18 @@ void gfilter(
 	dim3 blocks,
 	dim3 grids
 	);//filter: guided imaging filter result
+
+void gpuMemInit(int width, int height, int channels, float* rawData);
+void calcDarkChannel();
+void fillDarkChannelData(float* cpuData);
+
+extern float* 	gImgGPU;
+extern float* 	gDarkPixelGPU;
+extern float* 	gDarkPatchGPU;
+extern float* 	gGrayGPU;
+extern int 	gImgWidth;
+extern int 	gImgHeight;
+extern int 	gImgChannels;
 
 #endif /* DEHAZING_H_ */
 
