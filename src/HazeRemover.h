@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "dehazing.h"
+#include "softmatting.h"
 
 class HazeRemover {
 private:

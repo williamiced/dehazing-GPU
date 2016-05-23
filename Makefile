@@ -17,8 +17,9 @@ all:
 	@mkdir -p $(OBJ)
 	@mkdir -p $(BIN)
 	$(CXX) $(COMPILE_FLAGS) -c $(SRC)/HazeRemover.cpp -o $(OBJ)/HazeRemover.o $(CFLAGS)
-	$(NCXX) -c $(SRC)/dehazing.cu -o $(OBJ)/kernels.o $(CUDAFLAGS) 
-	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/kernels.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) 
+	$(NCXX) -c $(SRC)/dehazing.cu -o $(OBJ)/main_kernel.o $(CUDAFLAGS) 
+	$(NCXX) -c $(SRC)/softmatting.cu -o $(OBJ)/matting_kernel.o $(CUDAFLAGS) 
+	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) 
 
 run:
 	$(BIN)/dehazing -o output.png -i img/forest.jpg

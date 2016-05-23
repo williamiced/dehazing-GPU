@@ -6,7 +6,8 @@
 #define min(x,y) ((x<y)?x:y)
 #define max(x,y) ((x>y)?x:y)
 #define WINDOW 7
-#define OMEGA 0.95
+#define PARAM_OMEGA 0.95
+#define PARAM_T0 0.1
 
 using namespace std;
 
@@ -131,7 +132,7 @@ __global__ void kernelTransPatch (float* trans, float* new_trans, int width, int
 				}
 			}
 		}
-		new_trans[i] = 1.0 - OMEGA * minval;
+		new_trans[i] = 1.0 - PARAM_OMEGA * minval;
 	}
 }
 
@@ -140,7 +141,7 @@ __global__ void kernelDoDehaze (float3* img, float* trans, float Ax, float Ay, f
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
 	if(x < width && y < height) {
-		float denominator = max(0.1f, trans[i]);
+		float denominator = max(PARAM_T0, trans[i]);
 		img[i].x = (img[i].x - Ax) / denominator + Ax;
 		img[i].y = (img[i].y - Ay) / denominator + Ay;
 		img[i].z = (img[i].z - Az) / denominator + Az;
@@ -233,8 +234,6 @@ void calcTransmission(float* A) {
 	// No need anymore
 	CUDA_CHECK_RETURN( cudaFree(gTransPixelGPU) );
 }
-
-void refineTransmission() {}
 
 void doDehaze(float* A) {
 	SETUP_TIMER

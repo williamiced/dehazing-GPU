@@ -5,8 +5,6 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <vector>
-#include <algorithm>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
@@ -33,32 +31,11 @@
 #define CEIL(X) ((X-(int)(X)) > 0 ? (int)(X+1) : (int)(X))
 #define BLOCK_DIM 32
 
-void dehaze(
-	float *image,
-	float *dark,
-	float *t,
-	int height,
-	int width,
-	dim3 blocks,
-	dim3 grids
-	);
-
-void gfilter(
-	float *filter,
-	float *img_gray,
-	float *trans,
-	int height,
-	int width,
-	dim3 blocks,
-	dim3 grids
-	);//filter: guided imaging filter result
-
 void gpuMemInit(int width, int height, int channels, float* rawData);
 void gpuMemDestroy();
 void calcDarkChannel();
 void calcAirLight(float* A, float* rawData);
 void calcTransmission(float* A);
-void refineTransmission();
 void doDehaze(float* A);
 void fillDarkChannelData(float* cpuData);
 void fillTransmissionData(float* cpuData);
@@ -68,6 +45,8 @@ extern float* 	gImgGPU;
 extern float* 	gDarkPixelGPU;
 extern float* 	gDarkPatchGPU;
 extern float* 	gGrayGPU;
+extern float*	gTransPixelGPU;
+extern float*	gTransPatchGPU;
 extern int 	gImgWidth;
 extern int 	gImgHeight;
 extern int 	gImgChannels;
