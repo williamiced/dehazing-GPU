@@ -9,13 +9,14 @@ Dehazing algorithm implemented on CUDA.
 
 ##Usage
 
-Make sure you have openCV, CUDA toolkit installed and a NVIDIA graphic card
+Make sure you have Boost, OpenCV, CUDA toolkit installed and a NVIDIA graphic card
+Please modified the environment settings of CUDA if your CUDA version is not 7.5
 
 ```sh
-git clone https://github.com/arsenalliu123/dehazing-GPU.git
+git clone https://github.com/williamiced/dehazing-GPU
 cd dehazing-GPU
 make clean && make
-Debug/dehazing -h
+make run
 ```
 
 **Forked from https://github.com/arsenalliu123/dehazing-GPU**
