@@ -14,6 +14,8 @@ private:
 	void preProcess();
 	void loadImage();
 	void saveDarkChannelImage();
+	void saveTransmissionImage();
+	void saveDehazeImage();
 
 	std::string mInputFilePath;
 	cv::Mat 	mInputImg;
@@ -21,7 +23,9 @@ private:
 public:
 	void dehaze();
 	void setInputFilePath(std::string filePath);
+
 	HazeRemover();
+	~HazeRemover();
 };
 
 #endif // _H_HAZE_REMOVER
