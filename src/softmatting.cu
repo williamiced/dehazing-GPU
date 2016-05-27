@@ -74,12 +74,12 @@ __global__ void getAAndBMatrix(float* a, float* b, float* meanI, float* meanP, f
 	}
 }
 
-__global__ void getResultMatrix(float* I, float* meanA, float* meanB, int width, int height) {
+__global__ void getResultMatrix(float* result, float* I, float* meanA, float* meanB, int width, int height) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
 	if(x < width && y < height) {
-		I[i] = I[i] * meanA[i] + meanB[i];
+		result[i] = I[i] * meanA[i] + meanB[i];
 	}
 }
 
@@ -121,7 +121,7 @@ void refineTransmission() {
 	applyMeanFilter<<<gdim, bdim>>>(gA, gB, gN, gMeanA, gMeanB, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 	
-	getResultMatrix<<<gdim, bdim>>>(gTransPatchGPU, gMeanA, gMeanB, gImgWidth, gImgHeight);
+	getResultMatrix<<<gdim, bdim>>>(gTransPatchGPU, gGrayGPU, gMeanA, gMeanB, gImgWidth, gImgHeight);
 	CHECK
 }
 
