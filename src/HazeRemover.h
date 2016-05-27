@@ -16,6 +16,7 @@ private:
 	void loadImage();
 	void saveDarkChannelImage();
 	void saveTransmissionImage();
+	void saveRefineImage();
 	void saveDehazeImage();
 
 	std::string mInputFilePath;

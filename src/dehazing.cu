@@ -1,13 +1,6 @@
 #include "dehazing.h"
 #include <stdio.h>
 #include <iostream>
-//convenient macros
-#define IN_GRAPH(x,y,w,h) ((x>=0)&&(x<w)&&(y>=0)&&(y<h))
-#define min(x,y) ((x<y)?x:y)
-#define max(x,y) ((x>y)?x:y)
-#define WINDOW 7
-#define PARAM_OMEGA 0.95
-#define PARAM_T0 0.1
 
 using namespace std;
 

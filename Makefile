@@ -22,6 +22,8 @@ all:
 	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) 
 
 run:
+	#$(BIN)/dehazing -o output.png -i img/city2.jpg
+	#$(BIN)/dehazing -o output.png -i img/city.jpeg
 	$(BIN)/dehazing -o output.png -i img/forest.jpg
 	#$(BIN)/dehazing -o output.png -i img/rock.png
 

@@ -28,6 +28,13 @@ void HazeRemover::saveTransmissionImage() {
 	imwrite("Transmission.png", transmissionImage);	
 }
 
+void HazeRemover::saveRefineImage() {
+	Mat refineImage = Mat::zeros(mInputImg.size(), CV_32FC1);
+	fillRefineData((float*) refineImage.data);
+	refineImage *= 255.f;
+	imwrite("Refine.png", refineImage);
+}
+
 void HazeRemover::saveDehazeImage() {
 	Mat dehazeImage = Mat::zeros(mInputImg.size(), CV_32FC3);
 	fillDehazeData((float*) dehazeImage.data);
@@ -52,6 +59,7 @@ void HazeRemover::dehaze() {
 
 	// Refine Transmission using Soft-Matting
 	refineTransmission();
+	saveRefineImage();
 
 	// Dehaze
 	doDehaze(A);
