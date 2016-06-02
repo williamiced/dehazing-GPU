@@ -58,8 +58,10 @@ void HazeRemover::dehaze() {
 	saveTransmissionImage();
 
 	// Refine Transmission using Soft-Matting
+	initMemForSoftMatting();
+	preCalcForSoftMatting();
 	refineTransmission();
-	saveRefineImage();
+	//saveRefineImage();
 
 	// Dehaze
 	doDehaze(A);

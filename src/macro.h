@@ -5,10 +5,11 @@
 #define min(x,y) ((x<y)?x:y)
 #define max(x,y) ((x>y)?x:y)
 #define WINDOW 7
-#define WINDOW2 15
+#define WINDOW2 3
 #define PARAM_OMEGA 0.95
 #define PARAM_T0 0.1
 #define PARAM_EPSILON 0.000001
+#define PARAM_LAMBDA 0.0001
 
 #define CUDA_CHECK_RETURN(value) {											\
 	cudaError_t _m_cudaStat = value;										\
