@@ -219,6 +219,15 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	}
 }
 
+__global__ void inverseRefinement(float* r, int width, int height) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int i = y * width + x;
+	if(x < width && y < height) {
+		r[i] = (255.f - r[i]) / 255.f;
+	}
+}
+
 void initMemForSoftMatting() {
 	// 1 * 1
 	CUDA_CHECK_RETURN( cudaMalloc(&gRefineGPU, gImgWidth * gImgHeight * sizeof(float) ) );
@@ -255,68 +264,6 @@ void preCalcForSoftMatting() {
 	gRowEleCount = 0;
 	for (int i=0; i<gImgWidth; i++)
 		gRowEleCount += (2*WINDOW2+1) + min(i, min(2*WINDOW2, gImgWidth-1-i));
-}
-
-// For debug
-void quickDump(float* A, int w, int h, int c, char* title) {
-	float* tmp = (float*) malloc(sizeof(float) * w * h * c);
-	cudaMemcpy(tmp, A, w * h * c *sizeof(float), cudaMemcpyDeviceToHost);
-	
-	printf("======= Dump [%s] ==========\n", title);
-
-	printf("\t\t");
-	for (int x=0; x<w; x++) {
-		printf("[%3d] \t", x);
-	}
-	printf("\n");
-	for (int y=0; y<h; y++) {
-		printf("[%2d] | \t", y);
-		for (int a=0; a<c; a++) {
-			if (a == 0)
-				printf("\t");
-			else
-				printf("\t\t");
-			for (int x=0; x<w; x++) {
-				int i = y*w+x;
-				printf("%.4f\t", tmp[i*c+a]);
-			}
-			printf("\n");
-		}
-		printf("\n");
-	}
-	printf("======== End Dump ===========\n");
-	free(tmp);
-}
-
-// For debug
-void quickDumpInt(int* A, int w, int h, int c, char* title) {
-	int* tmp = (int*) malloc(sizeof(int) * w * h * c);
-	cudaMemcpy(tmp, A, w * h * c *sizeof(int), cudaMemcpyDeviceToHost);
-	
-	printf("======= Dump [%s] ==========\n", title);
-
-	printf("\t\t");
-	for (int x=0; x<w; x++) {
-		printf("[%3d] \t", x);
-	}
-	printf("\n");
-	for (int y=0; y<h; y++) {
-		printf("[%2d] | \t", y);
-		for (int a=0; a<c; a++) {
-			if (a == 0)
-				printf("\t");
-			else
-				printf("\t\t");
-			for (int x=0; x<w; x++) {
-				int i = y*w+x;
-				printf("%3d\t", tmp[i*c+a]);
-			}
-			printf("\n");
-		}
-		printf("\n");
-	}
-	printf("======== End Dump ===========\n");
-	free(tmp);
 }
 
 void refineTransmission() {
@@ -374,6 +321,8 @@ void refineTransmission() {
 			0, // reorder
 			gRefineGPU, 
 			&singularity);
+
+		inverseRefinement<<<gdim, bdim>>>(gRefineGPU, gImgWidth, gImgHeight);
 	}
 }
 
