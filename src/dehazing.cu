@@ -159,11 +159,8 @@ void gpuMemInit(int width, int height, int channels, float* rawData) {
 
 void gpuMemDestroy() {
 	CUDA_CHECK_RETURN( cudaFree(gImgGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gDarkPixelGPU) );
 	CUDA_CHECK_RETURN( cudaFree(gDarkPatchGPU) );
 	CUDA_CHECK_RETURN( cudaFree(gGrayGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gTransPixelGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gTransPatchGPU) );
 
 	CHECK
 }
@@ -181,6 +178,9 @@ void calcDarkChannel() {
 
 	kernelDarkPatch<<<gdim, bdim>>> (gDarkPixelGPU, gDarkPatchGPU, gImgWidth, gImgHeight, WINDOW);
 	CHECK
+
+	// No need anymore
+	CUDA_CHECK_RETURN( cudaFree(gDarkPixelGPU) );
 }
 
 void calcAirLight(float* A, float* rawData) {
@@ -223,6 +223,9 @@ void calcTransmission(float* A) {
 
 	kernelTransPatch<<<gdim, bdim>>> (gTransPixelGPU, gTransPatchGPU, gImgWidth, gImgHeight, WINDOW);
 	CHECK
+
+	// No need anymore
+	CUDA_CHECK_RETURN( cudaFree(gTransPixelGPU) );
 }
 
 void doDehaze(float* A) {
@@ -233,7 +236,7 @@ void doDehaze(float* A) {
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	kernelDoDehaze<<<gdim, bdim>>>( (float3*)gImgGPU, gRefineGPU, A[0], A[1], A[2], gImgWidth, gImgHeight);
+	kernelDoDehaze<<<gdim, bdim>>>( (float3*)gImgGPU, gTransPatchGPU, A[0], A[1], A[2], gImgWidth, gImgHeight);
 }
 
 void fillDarkChannelData(float* cpuData) {

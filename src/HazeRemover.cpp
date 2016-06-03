@@ -68,7 +68,6 @@ void HazeRemover::dehaze() {
 	saveDehazeImage();
 
 	delete[] A;
-	gpuMemDestroySoftMatting();
 	gpuMemDestroy();
 }
 

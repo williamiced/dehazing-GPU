@@ -16,7 +16,6 @@ void refineTransmission();
 void refineTransmissionLaplacian();
 void preCalcForSoftMatting();
 void initMemForSoftMatting();
-void gpuMemDestroySoftMatting();
 void fillRefineData(float* cpuData);
 
 // From core

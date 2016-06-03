@@ -222,7 +222,6 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 void initMemForSoftMatting() {
 	// 1 * 1
 	CUDA_CHECK_RETURN( cudaMalloc(&gRefineGPU, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMemset(gRefineGPU, 0.f, gImgWidth * gImgHeight * sizeof(float)));
 
 	// 1 * 1
 	CUDA_CHECK_RETURN( cudaMalloc(&gN, gImgWidth * gImgHeight * sizeof(float) ) );
@@ -258,17 +257,66 @@ void preCalcForSoftMatting() {
 		gRowEleCount += (2*WINDOW2+1) + min(i, min(2*WINDOW2, gImgWidth-1-i));
 }
 
-void gpuMemDestroySoftMatting() {
-	CUDA_CHECK_RETURN( cudaFree(gRefineGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gN) );
-	CUDA_CHECK_RETURN( cudaFree(gMeanI) );
-	CUDA_CHECK_RETURN( cudaFree(gCovI) );
-	CUDA_CHECK_RETURN( cudaFree(gInvCovI) );
-	CUDA_CHECK_RETURN( cudaFree(gCsrRowPtr) );
-	CUDA_CHECK_RETURN( cudaFree(gCsrColInd) );
-	CUDA_CHECK_RETURN( cudaFree(gLapVal) );
+// For debug
+void quickDump(float* A, int w, int h, int c, char* title) {
+	float* tmp = (float*) malloc(sizeof(float) * w * h * c);
+	cudaMemcpy(tmp, A, w * h * c *sizeof(float), cudaMemcpyDeviceToHost);
+	
+	printf("======= Dump [%s] ==========\n", title);
 
-	CHECK
+	printf("\t\t");
+	for (int x=0; x<w; x++) {
+		printf("[%3d] \t", x);
+	}
+	printf("\n");
+	for (int y=0; y<h; y++) {
+		printf("[%2d] | \t", y);
+		for (int a=0; a<c; a++) {
+			if (a == 0)
+				printf("\t");
+			else
+				printf("\t\t");
+			for (int x=0; x<w; x++) {
+				int i = y*w+x;
+				printf("%.4f\t", tmp[i*c+a]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+	}
+	printf("======== End Dump ===========\n");
+	free(tmp);
+}
+
+// For debug
+void quickDumpInt(int* A, int w, int h, int c, char* title) {
+	int* tmp = (int*) malloc(sizeof(int) * w * h * c);
+	cudaMemcpy(tmp, A, w * h * c *sizeof(int), cudaMemcpyDeviceToHost);
+	
+	printf("======= Dump [%s] ==========\n", title);
+
+	printf("\t\t");
+	for (int x=0; x<w; x++) {
+		printf("[%3d] \t", x);
+	}
+	printf("\n");
+	for (int y=0; y<h; y++) {
+		printf("[%2d] | \t", y);
+		for (int a=0; a<c; a++) {
+			if (a == 0)
+				printf("\t");
+			else
+				printf("\t\t");
+			for (int x=0; x<w; x++) {
+				int i = y*w+x;
+				printf("%3d\t", tmp[i*c+a]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+	}
+	printf("======== End Dump ===========\n");
+	free(tmp);
 }
 
 void refineTransmission() {
@@ -289,7 +337,6 @@ void refineTransmission() {
 	CHECK
 
 	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
-	CHECK
 
 	if (gImgChannels == 3) {
 		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
@@ -307,6 +354,8 @@ void refineTransmission() {
 		int nnz;
 		cudaMemcpy(&nnz, gCsrRowPtr + gImgWidth * gImgHeight, sizeof(int), cudaMemcpyDeviceToHost);
 		
+		printf("NNZ: %d\n", nnz);
+
 		cusparseMatDescr_t descr;
 		cusparseCreateMatDescr(&descr);
 		cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
@@ -325,8 +374,6 @@ void refineTransmission() {
 			0, // reorder
 			gRefineGPU, 
 			&singularity);
-
-		CHECK
 	}
 }
 
