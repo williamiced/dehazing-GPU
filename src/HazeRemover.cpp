@@ -61,7 +61,7 @@ void HazeRemover::dehaze() {
 	initMemForSoftMatting();
 	preCalcForSoftMatting();
 	refineTransmission();
-	//saveRefineImage();
+	saveRefineImage();
 
 	// Dehaze
 	doDehaze(A);

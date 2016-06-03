@@ -254,7 +254,7 @@ void initMemForSoftMatting() {
 void preCalcForSoftMatting() {
 	gRowEleCount = 0;
 	for (int i=0; i<gImgWidth; i++)
-		gRowEleCount += (WINDOW2+1) + min(i, min(WINDOW2, gImgWidth-1-i));
+		gRowEleCount += (2*WINDOW2+1) + min(i, min(2*WINDOW2, gImgWidth-1-i));
 }
 
 // For debug
