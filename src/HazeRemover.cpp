@@ -28,6 +28,13 @@ void HazeRemover::saveTransmissionImage() {
 	imwrite("Transmission.png", transmissionImage);	
 }
 
+void HazeRemover::saveGuidedImage() {
+	Mat guidedImage = Mat::zeros(mInputImg.size(), CV_32FC1);
+	fillGuidedData((float*) guidedImage.data);
+	guidedImage *= 255.f;
+	imwrite("Guided.png", guidedImage);
+}
+
 void HazeRemover::saveRefineImage() {
 	Mat refineImage = Mat::zeros(mInputImg.size(), CV_32FC1);
 	fillRefineData((float*) refineImage.data);
@@ -56,6 +63,11 @@ void HazeRemover::dehaze() {
 	// Calculate Transmisison
 	calcTransmission(A);
 	saveTransmissionImage();
+
+	// Refine Transmission using guided filter
+	initMemForGuidedFilter();
+	guidedFilter();
+	saveGuidedImage();
 
 	// Refine Transmission using Soft-Matting
 	initMemForSoftMatting();

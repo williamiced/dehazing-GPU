@@ -174,7 +174,7 @@ void calcDarkChannel() {
 	dim3 gdim(grid_size_x, grid_size_y);
 	
 	kernelDarkPixel<<<gdim, bdim>>> ((float3*) gImgGPU, gGrayGPU, gDarkPixelGPU, gImgWidth, gImgHeight);
-	CHECK
+	CHECK  //gDarkPixelGPU min(R,G,B)
 
 	kernelDarkPatch<<<gdim, bdim>>> (gDarkPixelGPU, gDarkPatchGPU, gImgWidth, gImgHeight, WINDOW);
 	CHECK

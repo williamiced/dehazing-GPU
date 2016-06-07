@@ -18,6 +18,7 @@ private:
 	void saveTransmissionImage();
 	void saveRefineImage();
 	void saveDehazeImage();
+	void saveGuidedImage();
 
 	std::string mInputFilePath;
 	cv::Mat 	mInputImg;
