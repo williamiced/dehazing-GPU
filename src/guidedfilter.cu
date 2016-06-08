@@ -147,20 +147,20 @@ void guidedFilter(){
 	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatch, gMeanI_t, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatch, cross, gN, gImgWidth, gImgHeight, WINDOW2)
+	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatch, cross, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN, gMeanI_g, gImgWidth, gImgHeight, WINDOW2)
+	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN, gMeanI_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 	
-	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW2) 
+	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW2); 
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN, gImgWidth, gImgHeight, WINDOW2)
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN, gImgWidth, gImgHeight, WINDOW2)
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	filter<<<gdim, bdim>>>(meanA, meanB, gGuidedGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW2)
+	filter<<<gdim, bdim>>>(meanA, meanB, gGuidedGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
 }
