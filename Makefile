@@ -20,8 +20,9 @@ all:
 	@mkdir -p $(BIN)
 	$(CXX) $(COMPILE_FLAGS) -c $(SRC)/HazeRemover.cpp -o $(OBJ)/HazeRemover.o $(CFLAGS)
 	$(NCXX) -c $(SRC)/dehazing.cu -o $(OBJ)/main_kernel.o $(CUDAFLAGS) 
+	$(NCXX) -c $(SRC)/guidedfilter.cu -o $(OBJ)/guided_kernel.o $(CUDAFLAGS) 
 	$(NCXX) -c $(SRC)/softmatting.cu -o $(OBJ)/matting_kernel.o $(CUDAFLAGS) 
-	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
+	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/guided_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
 
 run:
 	#$(BIN)/dehazing -o output.png -i img/city2.jpg
