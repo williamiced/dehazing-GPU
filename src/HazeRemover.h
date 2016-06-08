@@ -9,6 +9,7 @@
 
 #include "dehazing.h"
 #include "softmatting.h"
+#include "guidedfilter.h"
 
 class HazeRemover {
 private:
