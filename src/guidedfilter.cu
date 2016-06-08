@@ -2,11 +2,14 @@
 
 float* 	gGuidedGPU;
 float* 	gN;
-float* 	gMeanI_g, gMeanI_t;
+float* 	gMeanI_g
+float*  gMeanI_t;
 float*  sigmai;
 float*  cross;
-float*  a, b;
-float*  meanA, meanB;
+float*  a;
+float*  b;
+float*  meanA;
+float*  meanB;
 
 __global__ void getNMatrix(float* N, int width, int height, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -144,10 +147,10 @@ void guidedFilter(){
 	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gGrayGPU, gMeanI_g, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatch, gMeanI_t, gN, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatch, cross, gN, gImgWidth, gImgHeight, WINDOW2);
+	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
 	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN, gMeanI_g, gImgWidth, gImgHeight, WINDOW2);
