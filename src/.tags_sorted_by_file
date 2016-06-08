@@ -1,0 +1,42 @@
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_PROGRAM_VERSION	5.8	//
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+HazeRemover	HazeRemover.cpp	/^HazeRemover::HazeRemover() {$/;"	f	class:HazeRemover
+dehaze	HazeRemover.cpp	/^void HazeRemover::dehaze() {	$/;"	f	class:HazeRemover
+loadImage	HazeRemover.cpp	/^void HazeRemover::loadImage() {$/;"	f	class:HazeRemover
+preProcess	HazeRemover.cpp	/^void HazeRemover::preProcess() {$/;"	f	class:HazeRemover
+saveDarkChannelImage	HazeRemover.cpp	/^void HazeRemover::saveDarkChannelImage() {$/;"	f	class:HazeRemover
+saveDehazeImage	HazeRemover.cpp	/^void HazeRemover::saveDehazeImage() {$/;"	f	class:HazeRemover
+saveGuidedImage	HazeRemover.cpp	/^void HazeRemover::saveGuidedImage() {$/;"	f	class:HazeRemover
+saveRefineImage	HazeRemover.cpp	/^void HazeRemover::saveRefineImage() {$/;"	f	class:HazeRemover
+saveTransmissionImage	HazeRemover.cpp	/^void HazeRemover::saveTransmissionImage() {$/;"	f	class:HazeRemover
+setInputFilePath	HazeRemover.cpp	/^void HazeRemover::setInputFilePath(string filePath) {$/;"	f	class:HazeRemover
+~HazeRemover	HazeRemover.cpp	/^HazeRemover::~HazeRemover() {$/;"	f	class:HazeRemover
+HazeRemover	HazeRemover.h	/^class HazeRemover {$/;"	c
+_H_HAZE_REMOVER	HazeRemover.h	/^#define _H_HAZE_REMOVER$/;"	d
+mInputFilePath	HazeRemover.h	/^	std::string mInputFilePath;$/;"	m	class:HazeRemover
+mInputImg	HazeRemover.h	/^	cv::Mat 	mInputImg;$/;"	m	class:HazeRemover
+DEHAZING_H_	dehazing.h	/^#define DEHAZING_H_$/;"	d
+GUIDED_FILTER_H_	guidedfilter.h	/^#define GUIDED_FILTER_H_$/;"	d
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+BLOCK_DIM	macro.h	/^#define BLOCK_DIM /;"	d
+CEIL	macro.h	/^#define CEIL(/;"	d
+CHECK	macro.h	/^#define CHECK /;"	d
+CUDA_CHECK_RETURN	macro.h	/^#define CUDA_CHECK_RETURN(/;"	d
+IN_GRAPH	macro.h	/^#define IN_GRAPH(/;"	d
+MACRO_H_	macro.h	/^#define MACRO_H_$/;"	d
+PARAM_EPSILON	macro.h	/^#define PARAM_EPSILON /;"	d
+PARAM_LAMBDA	macro.h	/^#define PARAM_LAMBDA /;"	d
+PARAM_OMEGA	macro.h	/^#define PARAM_OMEGA /;"	d
+PARAM_T0	macro.h	/^#define PARAM_T0 /;"	d
+SETUP_TIMER	macro.h	/^#define SETUP_TIMER /;"	d
+WINDOW	macro.h	/^#define WINDOW /;"	d
+WINDOW2	macro.h	/^#define WINDOW2 /;"	d
+max	macro.h	/^#define max(/;"	d
+min	macro.h	/^#define min(/;"	d
+checkInputPathValid	main.cpp	/^void checkInputPathValid(string pathName) {$/;"	f
+main	main.cpp	/^int main(int argc, char * argv[]) {$/;"	f
+processArgs	main.cpp	/^void processArgs(int argc, char** argv) {$/;"	f
+SOFT_MATTING_H_	softmatting.h	/^#define SOFT_MATTING_H_$/;"	d
