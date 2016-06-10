@@ -140,27 +140,27 @@ void guidedFilter(){
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	getNMatrix<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW2);
+	getNMatrix2<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
 	//use gray image as guided image
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gGrayGPU, gMeanI_g, gN, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gGrayGPU, gMeanI_g, gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN, gImgWidth, gImgHeight, WINDOW2);
+	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
-	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN, gMeanI_g, gImgWidth, gImgHeight, WINDOW2);
+	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN_g, gMeanI_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 	
 	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW2); 
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN, gImgWidth, gImgHeight, WINDOW2);
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN_g, gImgWidth, gImgHeight, WINDOW2);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
 	filter<<<gdim, bdim>>>(meanA, meanB, gGuidedGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW2);
