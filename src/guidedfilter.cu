@@ -1,7 +1,7 @@
 #include "guidedfilter.h"
 
 float* 	gGuidedGPU;
-float* 	gN;
+float* 	gN_g;
 float* 	gMeanI_g;
 float*  gMeanI_t;
 float*  sigmai;
@@ -11,7 +11,7 @@ float*  b;
 float*  meanA;
 float*  meanB;
 
-__global__ void getNMatrix(float* N, int width, int height, int window) {
+__global__ void getNMatrix2(float* N, int width, int height, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
@@ -114,7 +114,7 @@ void initMemForGuidedFilter() {
 	CUDA_CHECK_RETURN( cudaMalloc((void **) &gGuidedGPU, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &gN, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &gN_g, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	// 3 * 1
 	CUDA_CHECK_RETURN( cudaMalloc((void **) &gMeanI_g, gImgWidth * gImgHeight * sizeof(float) ) );
@@ -140,7 +140,7 @@ void guidedFilter(){
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	getNMatrix<<<gdim, bdim>>>(gN, gImgWidth, gImgHeight, WINDOW2);
+	getNMatrix<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW2);
 	CHECK
 
 	//use gray image as guided image

@@ -26,7 +26,7 @@ extern int 	gImgChannels;
 
 // For Guided Filter
 extern float* 	gGuidedGPU;
-extern float* 	gN;
+extern float* 	gN_g;
 extern float* 	gMeanI_g;
 extern float*   gMeanI_t;
 extern float*   sigmai;
