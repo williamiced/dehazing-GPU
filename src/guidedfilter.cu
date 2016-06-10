@@ -111,24 +111,24 @@ __global__ void filter(float* meanA, float* meanB, float* guidedResult, float* i
 
 void initMemForGuidedFilter() {
 	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gGuidedGPU, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &gGuidedGPU, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gN, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &gN, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	// 3 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gMeanI_g, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gMeanI_t, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &gMeanI_g, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &gMeanI_t, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	//
-	CUDA_CHECK_RETURN( cudaMalloc(&sigmai, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&cross, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &sigmai, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &cross, gImgWidth * gImgHeight * sizeof(float) ) );
 
-	CUDA_CHECK_RETURN( cudaMalloc(&a, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&b, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &a, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &b, gImgWidth * gImgHeight * sizeof(float) ) );
 
-	CUDA_CHECK_RETURN( cudaMalloc(&meanA, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&meanB, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &meanA, gImgWidth * gImgHeight * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void **) &meanB, gImgWidth * gImgHeight * sizeof(float) ) );
 
 }
 
