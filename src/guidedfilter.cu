@@ -2,7 +2,7 @@
 
 float* 	gGuidedGPU;
 float* 	gN;
-float* 	gMeanI_g
+float* 	gMeanI_g;
 float*  gMeanI_t;
 float*  sigmai;
 float*  cross;
@@ -105,7 +105,7 @@ __global__ void filter(float* meanA, float* meanB, float* guidedResult, float* i
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
 	if(x < width && y < height) {
-		guidedResult[i] = meanA[i] * input[i] + meanB;
+		guidedResult[i] = meanA[i] * input[i] + meanB[i];
 	}
 }
 
