@@ -27,8 +27,8 @@ all:
 run:
 	#$(BIN)/dehazing -o output.png -i img/city2.jpg
 	#$(BIN)/dehazing -o output.png -i img/city.jpeg
-	#$(BIN)/dehazing -o output.png -i img/forest.jpg
-	$(BIN)/dehazing -o output.png -i img/forest_small.jpg
+	$(BIN)/dehazing -o output.png -i img/forest.jpg
+	#$(BIN)/dehazing -o output.png -i img/forest_small.jpg
 	#$(BIN)/dehazing -o output.png -i img/forest_tiny.jpg
 	#$(BIN)/dehazing -o output.png -i img/rock.png
 
