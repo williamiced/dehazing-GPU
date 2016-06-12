@@ -6,6 +6,7 @@
 #define max(x,y) ((x>y)?x:y)
 #define WINDOW 7
 #define WINDOW2 3
+#define WINDOW3 15
 #define PARAM_OMEGA 0.95
 #define PARAM_T0 0.1
 #define PARAM_EPSILON 0.000001
