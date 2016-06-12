@@ -27,7 +27,7 @@ extern int 	gImgHeight;
 extern int 	gImgChannels;
 
 // From guided filter (test)
-extern float* gGuidedGPU
+extern float* gGuidedGPU;
 
 // For soft matting
 extern float* gRefineGPU;
