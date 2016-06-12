@@ -283,7 +283,7 @@ void refineTransmission() {
 	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
 	CHECK
 
-	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
+	multiplyLambda<<<gdim, bdim>>>(gGuidedGPU, gImgWidth, gImgHeight);
 
 	if (gImgChannels == 3) {
 		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
@@ -316,7 +316,7 @@ void refineTransmission() {
 			gLapVal,
 			gCsrRowPtr,
 			gCsrColInd,
-			gTransPatchGPU, // b
+			gGuidedGPU, // b
 			1e-5, // tol
 			0, // reorder
 			gRefineGPU, 
