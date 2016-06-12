@@ -236,7 +236,7 @@ void doDehaze(float* A) {
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	kernelDoDehaze<<<gdim, bdim>>>( (float3*)gImgGPU, gRefineGPU, A[0], A[1], A[2], gImgWidth, gImgHeight);
+	kernelDoDehaze<<<gdim, bdim>>>( (float3*)gImgGPU, gGuidedGPU, A[0], A[1], A[2], gImgWidth, gImgHeight);
 }
 
 void fillDarkChannelData(float* cpuData) {

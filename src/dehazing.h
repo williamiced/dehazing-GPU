@@ -31,7 +31,7 @@ extern int 	gImgHeight;
 extern int 	gImgChannels;
 
 // From soft matting
-extern float* gRefineGPU;
+extern float* gGuidedGPU;
 
 #endif /* DEHAZING_H_ */
 
