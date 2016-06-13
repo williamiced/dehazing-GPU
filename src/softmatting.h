@@ -35,6 +35,5 @@ extern float* gInvCovI;
 extern int*	gCsrRowPtr;
 extern int* gCsrColInd;
 extern float* gLapVal;
-extern cusolverSpHandle_t gSpSolver;
 
 #endif // SOFT_MATTING_H

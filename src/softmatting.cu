@@ -9,7 +9,6 @@ int*	gCsrRowPtr;
 int* 	gCsrColInd;
 float* 	gLapVal;
 int 	gRowEleCount;
-cusolverSpHandle_t gSpSolver;
 
 __global__ void getNMatrix(float* N, int width, int height, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -252,12 +251,6 @@ void initMemForSoftMatting() {
 	CUDA_CHECK_RETURN( cudaMalloc(&gCsrColInd, nnz * sizeof(int) ) );
 	CUDA_CHECK_RETURN( cudaMalloc(&gLapVal, nnz * sizeof(float) ) );
 	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, nnz * sizeof(float)));
-
-	cusolverStatus_t status = cusolverSpCreate(&gSpSolver);
-	if (status != CUSOLVER_STATUS_SUCCESS) {
-		printf("Solver create error\n");
-		exit(-1);
-	}
 }
 
 void preCalcForSoftMatting() {
@@ -283,7 +276,7 @@ void refineTransmission() {
 	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
+	//multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
 
 	if (gImgChannels == 3) {
 		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
@@ -303,24 +296,54 @@ void refineTransmission() {
 		
 		printf("NNZ: %d\n", nnz);
 
+		cusparseHandle_t cuSparseHandle;
 		cusparseMatDescr_t descr;
-		cusparseCreateMatDescr(&descr);
-		cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
-		cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
-		int singularity = 0;
+		cusparseSolveAnalysisInfo_t info;
 
-		cusolverStatus_t status = cusolverSpScsrlsvqr(gSpSolver, 
-			gImgWidth * gImgHeight, // n
-			nnz, // nnzA
+		cusparseCreate (&cuSparseHandle);
+		cusparseCreateMatDescr (&descr);
+		cusparseSetMatIndexBase (descr, CUSPARSE_INDEX_BASE_ZERO);
+		cusparseSetMatType (descr, CUSPARSE_MATRIX_TYPE_TRIANGULAR);
+		cusparseCreateSolveAnalysisInfo (&info);
+
+		int m = gImgWidth * gImgHeight;
+
+		cusparseStatus_t status;
+		status = cusparseScsrsv_analysis(cuSparseHandle, 
+			CUSPARSE_OPERATION_NON_TRANSPOSE,
+			m, // m
+			nnz, // nnz
 			descr, // cusparseMatDescr_t
 			gLapVal,
 			gCsrRowPtr,
 			gCsrColInd,
+			info
+		);
+
+		if (status != CUSPARSE_STATUS_SUCCESS) {
+			printf("Analysis error\n");
+			exit(-1);
+		}
+
+		float alpha = (float) PARAM_LAMBDA;
+
+		status = cusparseScsrsv_solve(cuSparseHandle, 
+			CUSPARSE_OPERATION_NON_TRANSPOSE,
+			m, // m
+			&alpha, // alpha
+			descr,
+			gLapVal,
+			gCsrRowPtr,
+			gCsrColInd,
+			info, 
 			gTransPatchGPU, // b
-			1e-5, // tol
-			0, // reorder
-			gRefineGPU, 
-			&singularity);
+			gRefineGPU // X
+		);
+
+		if (status != CUSPARSE_STATUS_SUCCESS) {
+			printf("Solve error %d\n", status);
+			//exit(-1);
+		}
 
 		inverseRefinement<<<gdim, bdim>>>(gRefineGPU, gImgWidth, gImgHeight);
 	}
