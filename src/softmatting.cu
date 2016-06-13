@@ -245,7 +245,7 @@ void initMemForSoftMatting() {
 	CUDA_CHECK_RETURN( cudaMalloc(&gInvCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
 
 	// nnz * 1 (nnz < size*(4w+1)^2 )
-	int nnz = gImgWidth * gImgHeight * (WINDOW2 * 4 + 1) * (WINDOW2 * 4 + 1);	
+	int nnz = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
 
 	// Sparse Matrix Structure
 	CUDA_CHECK_RETURN( cudaMalloc(&gCsrRowPtr, (gImgWidth * gImgHeight + 1) * sizeof(int) ) );	
@@ -263,7 +263,7 @@ void initMemForSoftMatting() {
 void preCalcForSoftMatting() {
 	gRowEleCount = 0;
 	for (int i=0; i<gImgWidth; i++)
-		gRowEleCount += (2*WINDOW2+1) + min(i, min(2*WINDOW2, gImgWidth-1-i));
+		gRowEleCount += (2*WINDOW_SM+1) + min(i, min(2*WINDOW_SM, gImgWidth-1-i));
 }
 
 void refineTransmission() {
@@ -274,28 +274,28 @@ void refineTransmission() {
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	getNMatrix<<<gdim, bdim>>>(gN, gImgWidth, gImgHeight, WINDOW2);
+	getNMatrix<<<gdim, bdim>>>(gN, gImgWidth, gImgHeight, WINDOW_SM);
 	CHECK
 
-	getMeanMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
+	getMeanMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
+	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	multiplyLambda<<<gdim, bdim>>>(gGuidedGPU, gImgWidth, gImgHeight);
+	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
 
 	if (gImgChannels == 3) {
-		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
+		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 		CHECK
 
-		fillSparseStructure<<<gdim, bdim>>>(gCsrRowPtr, gCsrColInd, gImgWidth, gImgHeight, gImgChannels, gRowEleCount, WINDOW2);
+		fillSparseStructure<<<gdim, bdim>>>(gCsrRowPtr, gCsrColInd, gImgWidth, gImgHeight, gImgChannels, gRowEleCount, WINDOW_SM);
 		CHECK
 
 		dim3 bdim_Lap(BLOCK_DIM, BLOCK_DIM);
 		int gridSize = CEIL(double(gImgWidth * gImgHeight) / BLOCK_DIM);
 		dim3 gdim_Lap(gridSize, gridSize);
-		calcLaplacian<<<gdim_Lap, bdim_Lap>>>(gImgGPU, gN, gMeanI, gInvCovI, gCsrRowPtr, gCsrColInd, gLapVal, gImgWidth, gImgHeight, gImgChannels, WINDOW2);
+		calcLaplacian<<<gdim_Lap, bdim_Lap>>>(gImgGPU, gN, gMeanI, gInvCovI, gCsrRowPtr, gCsrColInd, gLapVal, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 		CHECK
 
 		int nnz;
@@ -316,7 +316,7 @@ void refineTransmission() {
 			gLapVal,
 			gCsrRowPtr,
 			gCsrColInd,
-			gGuidedGPU, // b
+			gTransPatchGPU, // b
 			1e-5, // tol
 			0, // reorder
 			gRefineGPU, 

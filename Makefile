@@ -22,13 +22,13 @@ all:
 	$(NCXX) -c $(SRC)/dehazing.cu -o $(OBJ)/main_kernel.o $(CUDAFLAGS) 
 	$(NCXX) -c $(SRC)/guidedfilter.cu -o $(OBJ)/guided_kernel.o $(CUDAFLAGS) 
 	$(NCXX) -c $(SRC)/softmatting.cu -o $(OBJ)/matting_kernel.o $(CUDAFLAGS) 
-	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/guided_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
+	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/guided_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
 
 run:
 	#$(BIN)/dehazing -o output.png -i img/city2.jpg
 	#$(BIN)/dehazing -o output.png -i img/city.jpeg
-	$(BIN)/dehazing -o output.png -i img/forest.jpg
-	#$(BIN)/dehazing -o output.png -i img/forest_small.jpg
+	#$(BIN)/dehazing -o output.png -i img/forest.jpg
+	$(BIN)/dehazing -o output.png -i img/forest_small.jpg
 	#$(BIN)/dehazing -o output.png -i img/forest_tiny.jpg
 	#$(BIN)/dehazing -o output.png -i img/rock.png
 

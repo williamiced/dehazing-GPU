@@ -1,6 +1,5 @@
 #include "guidedfilter.h"
 
-float* 	gGuidedGPU;
 float* 	gN_g;
 float* 	gMeanI_g;
 float*  gMeanI_t;
@@ -110,8 +109,6 @@ __global__ void filter(float* meanA, float* meanB, float* guidedResult, float* i
 }
 
 void initMemForGuidedFilter() {
-	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &gGuidedGPU, gImgWidth * gImgHeight * sizeof(float) ) );
 
 	// 1 * 1
 	CUDA_CHECK_RETURN( cudaMalloc((void **) &gN_g, gImgWidth * gImgHeight * sizeof(float) ) );
@@ -132,7 +129,7 @@ void initMemForGuidedFilter() {
 
 }
 
-void guidedFilter(){
+void doGuidedFilter(){
 	SETUP_TIMER
 
 	dim3 bdim(BLOCK_DIM, BLOCK_DIM);
@@ -140,34 +137,36 @@ void guidedFilter(){
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
-	getNMatrix2<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW3);
+	initMemForGuidedFilter();
+
+	getNMatrix2<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
 	//use gray image as guided image
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gGrayGPU, gMeanI_g, gN_g, gImgWidth, gImgHeight, WINDOW3);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gGrayGPU, gMeanI_g, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN_g, gImgWidth, gImgHeight, WINDOW3);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN_g, gImgWidth, gImgHeight, WINDOW3);
+	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN_g, gMeanI_g, gImgWidth, gImgHeight, WINDOW3);
+	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN_g, gMeanI_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 	
-	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW3); 
+	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW_GF); 
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN_g, gImgWidth, gImgHeight, WINDOW3);
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN_g, gImgWidth, gImgHeight, WINDOW3);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	filter<<<gdim, bdim>>>(meanA, meanB, gGuidedGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW3);
+	filter<<<gdim, bdim>>>(meanA, meanB, gTransPatchGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
 }
 
 void fillGuidedData(float* cpuData) {
-	CUDA_CHECK_RETURN( cudaMemcpy(cpuData, gGuidedGPU, gImgWidth * gImgHeight * sizeof(float), cudaMemcpyDeviceToHost) );
+	CUDA_CHECK_RETURN( cudaMemcpy(cpuData, gTransPatchGPU, gImgWidth * gImgHeight * sizeof(float), cudaMemcpyDeviceToHost) );
 }	

@@ -8,7 +8,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "dehazing.h"
-#include "guidedfilter.h"
+#include "guidedFilter.h"
 #include "softmatting.h"
 
 class HazeRemover {
