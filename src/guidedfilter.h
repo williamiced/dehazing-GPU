@@ -12,7 +12,8 @@
 
 #include "macro.h"
 
-void initMemForGuidedFilter();
+void guidedMemInit();
+void guidedMemDestroy();
 void doGuidedFilter();
 void fillGuidedData(float* cpuData);
 
@@ -20,6 +21,9 @@ void fillGuidedData(float* cpuData);
 extern float* 	gImgGPU;
 extern float* 	gGrayGPU;
 extern float*	gTransPatchGPU;
+
+extern float**	g1ChannelContainerGPU;
+
 extern int 	gImgWidth;
 extern int 	gImgHeight;
 extern int 	gImgChannels;
@@ -28,11 +32,11 @@ extern int 	gImgChannels;
 extern float* 	gN_g;
 extern float* 	gMeanI_g;
 extern float*   gMeanI_t;
-extern float*   sigmai;
-extern float*   cross;
-extern float*   a;
-extern float*   b;
-extern float*   meanA;
-extern float*   meanB;
+extern float*   gSigmai;
+extern float*   gCross;
+extern float*   gA;
+extern float*   gB;
+extern float*   gMeanA;
+extern float*   gMeanB;
 
 #endif // GUIDED_FILTER_H

@@ -3,16 +3,42 @@
 using namespace std;
 using namespace cv;
 
-void HazeRemover::loadImage() {
-	mInputImg = imread(mInputFilePath);
-	mInputImg.convertTo(mInputImg, CV_32FC3);
+int HazeRemover::getLoopCount() {
+	if (endsWith(mInputFilePath, ".png") || endsWith(mInputFilePath, ".jpg") || endsWith(mInputFilePath, ".jpeg")) {
+		mIsVideo = false;
+		return 1;
+	} else {
+		mVideoCapture = new VideoCapture(mInputFilePath);
+		mIsVideo = true;
+		return mVideoCapture->get(CV_CAP_PROP_FRAME_COUNT);
+	}
 }
 
-void HazeRemover::preProcess() {
-	loadImage();
+void HazeRemover::loadImage() {
+	if (mIsVideo) {
+		bool isSuccess = false;
+		do {
+			isSuccess = mVideoCapture->read(mInputImg);
+		} while(!isSuccess);
+	} else {
+		mInputImg = imread(mInputFilePath);
+	}
+	mInputImg.convertTo(mInputImg, CV_32FC3);	
+}
 
-	// GPU memory allocation
-	gpuMemInit(mInputImg.cols, mInputImg.rows, mInputImg.channels(), (float*) mInputImg.data);
+void HazeRemover::postProcess() {
+	if (mIsVideo)
+		mVideoCapture->release();
+	
+	coreMemDestroy();
+	guidedMemDestroy();
+	softMattingMemDestroy();
+}
+
+void HazeRemover::gpuMemInit() {
+	coreMemInit(mInputImg.cols, mInputImg.rows, mInputImg.channels(), (float*) mInputImg.data);
+	guidedMemInit();
+	softMattingMemInit();
 }
 
 void HazeRemover::saveDarkChannelImage() {
@@ -41,36 +67,59 @@ void HazeRemover::saveDehazeImage() {
 	imwrite("Dehaze.png", dehazeImage);	
 }
 
-void HazeRemover::dehaze() {	
-	// Pre-process
-	preProcess();
+void HazeRemover::dehaze() {
+	int loopCount = getLoopCount();
+
+	float* A = nullptr;
+	bool isFirstLoop = true;
+
+	while (loopCount > 0) {
+		// load image from image or video
+		loadImage();
+
+		// Init GPU memory for the first loop
+		if (isFirstLoop) {
+			gpuMemInit();
+			preCalcForSoftMatting();
+			
+			isFirstLoop = false;
+		}
+		
+		// Calculate Dark Channel
+		calcDarkChannel();
+#ifdef __DEBUG
+		saveDarkChannelImage();
+#endif
+		if (A == nullptr)
+			A = new float[mInputImg.channels() * sizeof(float)];
+
+		// Calculate Air Light
+		calcAirLight(A, (float*) mInputImg.data);
+
+		// Calculate Transmisison
+		calcTransmission(A);
+
+		// Refine Transmission using Soft-Matting
+		doGuidedFilter();
+#ifdef __DEBUG
+		saveTransmissionImage();
+#endif
+
+		refineTransmission();
+#ifdef __DEBUG
+		saveRefineImage();
+#endif
+
+		// Dehaze
+		doDehaze(A);
+		saveDehazeImage();	
+
+		loopCount--;
+	}
 	
-	// Calculate Dark Channel
-	calcDarkChannel();
-	saveDarkChannelImage();
-
-	// Calculate Air Light
-	float* A = new float[mInputImg.channels() * sizeof(float)];
-	calcAirLight(A, (float*) mInputImg.data);
-
-	// Calculate Transmisison
-	calcTransmission(A);
-
-	// Refine Transmission using Soft-Matting
-	initMemForSoftMatting();
-	preCalcForSoftMatting();
-	doGuidedFilter();
-	saveTransmissionImage();
-	
-	refineTransmission();
-	saveRefineImage();
-
-	// Dehaze
-	doDehaze(A);
-	saveDehazeImage();
-
-	delete[] A;
-	gpuMemDestroy();
+	if (A != nullptr)
+		delete[] A;
+	postProcess();
 }
 
 void HazeRemover::setInputFilePath(string filePath) {

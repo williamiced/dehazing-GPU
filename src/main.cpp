@@ -44,8 +44,7 @@ void processArgs(int argc, char** argv) {
 		options_description desc{"Options"};
 		desc.add_options() 
 			("help,h", "Help screen")
-			("input,i", value<string>()->notifier(checkInputPathValid), "Input image")
-			("output,o", value<string>()->default_value("output.png"), "Output image");
+			("input,i", value<string>()->notifier(checkInputPathValid), "Input image");
 
 		variables_map vm;
 		store(parse_command_line(argc, argv, desc), vm);

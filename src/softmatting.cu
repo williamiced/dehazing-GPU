@@ -167,55 +167,56 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	const int jy = j / width;
 
 	const int size = width * height;
-	if (i >= size || j >= size)
+
+	// I must be smaller than J to get upper triangular Laplacian matrix
+	// As a result, we know jy >= iy
+	if (i >= size || j >= size || i > j) 
 		return;
 
-	const int kernelSizeX = 2 * window + 1 - abs(ix-jx);
-	const int kernelSizeY = 2 * window + 1 - abs(iy-jy);
+	// If distance of I and J is too large, that means there will be no window cover both I and J, so could be ignored
+	if (abs(ix-jx) > 2 * window || abs(iy-jy) > 2 * window) 
+		return;
 
-	if (kernelSizeX > 0 && kernelSizeY > 0) {
-		const float invWeight = 1.f / N[i];
+	float total = 0.f;
+	float* Ii = I + i * channels;
+	float* Ij = I + j * channels;
+	int leftX = ix < jx ? ix : jx;
+	int rightX = (leftX == ix ? jx : ix);
 
-		const int left = min(ix, jx);
-		const int right = max(ix, jx);
-		const int top = min(iy, jy);
-		const int bottom = max(iy, jy);
-		float total = 0.f;
-		float* Ii = I + i * channels;
-		float* Ij = I + j * channels;
-		bool isZero = true;
+	for (int x = max(rightX-window, 0); x <= min(leftX+window, width-1); x++) {
+		for (int y = max(jy-window, 0); y <= min(iy+window, height-1); y++) {
+			float delta = (i == j ? 1.f : 0.f);
+			int k = y * width + x; // Current window center
+			float invWeight = 1.f / N[k];
 
-		for(int x=right - window; x <= left + window; x++) {
-			for (int y=bottom - window; y <= top + window; y++) {
-				isZero = false;
-				float delta = (i == j ? 1.f : 0.f);
-				float term = 0.f;
-				int k = y * width + x;
-				for (int c=0; c<channels; c++) {
-					float firstStep = 0.f;
-					for (int c2=0; c2<channels; c2++)
-						firstStep += (Ii[c2] - Mu[k * channels + c2]) * InvTerm[c2 * channels + c];
-					term += (Ij[c] - Mu[k * channels + c]) * firstStep;
-				}
-				total += delta - invWeight * (1 + term);
+			// 								[Inv_0	Inv_1	Inv_2]		[Ij_R]
+			// [Ii_R	Ii_G	Ii_B]	x	[Inv_3	Inv_4	Inv_5]	x	[Ij_G]
+			//								[Inv_6	Inv_7	Inv_8]		[Ij_B]
+
+			float currentTerm = 0.f;
+			for(int c1=0; c1<channels; c1++) {
+				float tmpVal = 0.f;
+				for (int c2=0; c2<channels; c2++) 
+					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channels*channels + c2*channels + c1];
+				currentTerm += tmpVal * (Ij[c1] - Mu[k*channels + c1]);
 			}
+			total += delta - invWeight * ( 1 + currentTerm );
 		}
-
-		if (!isZero) {
-			// Get location of L
-			// First, I need to know the order of j in the i's window
-			int lx = max(ix-2*window, 0);
-			int rx = min(ix+2*window, width-1);
-
-			int offset = (rx-lx+1) * (jy-iy) + (jx-ix);
-			int idx = csrRowPtr[i] + offset;
-
-			L[idx] = total;
-
-			if (i == j)
-				L[idx] += PARAM_LAMBDA;
-		} 
 	}
+
+	// Get location of L
+
+	int lx = max(ix-2*window, 0);
+	int rx = min(ix+2*window, width-1);
+	int ly = max(iy-2*window, 0);
+
+	int offset = (jy-ly) * (rx-lx+1) + (jx-lx); // yOffset * rangeWidth + xOffset
+	int idx = csrRowPtr[i] + offset;
+
+	if (i == j)
+		L[idx] = PARAM_LAMBDA + total;
+	else
+		L[idx] = total;
 }
 
 __global__ void inverseRefinement(float* r, int width, int height) {
@@ -227,30 +228,31 @@ __global__ void inverseRefinement(float* r, int width, int height) {
 	}
 }
 
-void initMemForSoftMatting() {
-	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gRefineGPU, gImgWidth * gImgHeight * sizeof(float) ) );
-
-	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gN, gImgWidth * gImgHeight * sizeof(float) ) );
+void softMattingMemInit() {
+	gRefineGPU	= g1ChannelContainerGPU[2];
+	gN 			= g1ChannelContainerGPU[3];
 
 	// 3 * 1
-	CUDA_CHECK_RETURN( cudaMalloc(&gMeanI, gImgWidth * gImgHeight * gImgChannels * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gMeanI, gImgWidth * gImgHeight * gImgChannels * sizeof(float) ) );
 
 	// 3 * 3
-	CUDA_CHECK_RETURN( cudaMalloc(&gCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gInvCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
 
-	// 3 * 3
-	CUDA_CHECK_RETURN( cudaMalloc(&gInvCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
-
-	// nnz * 1 (nnz < size*(4w+1)^2 )
 	int nnz = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
-
 	// Sparse Matrix Structure
-	CUDA_CHECK_RETURN( cudaMalloc(&gCsrRowPtr, (gImgWidth * gImgHeight + 1) * sizeof(int) ) );	
-	CUDA_CHECK_RETURN( cudaMalloc(&gCsrColInd, nnz * sizeof(int) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gLapVal, nnz * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, nnz * sizeof(float)));
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCsrRowPtr, (gImgWidth * gImgHeight + 1) * sizeof(int) ) );	
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCsrColInd, nnz * sizeof(int) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gLapVal, nnz * sizeof(float) ) );
+}
+
+void softMattingMemDestroy() {
+	CUDA_CHECK_RETURN( cudaFree(gMeanI) );
+	CUDA_CHECK_RETURN( cudaFree(gCovI) );
+	CUDA_CHECK_RETURN( cudaFree(gInvCovI) );
+	CUDA_CHECK_RETURN( cudaFree(gCsrRowPtr) );
+	CUDA_CHECK_RETURN( cudaFree(gCsrColInd) );
+	CUDA_CHECK_RETURN( cudaFree(gLapVal) );
 }
 
 void preCalcForSoftMatting() {
@@ -261,6 +263,11 @@ void preCalcForSoftMatting() {
 
 void refineTransmission() {
 	SETUP_TIMER
+
+	int maxNNZ = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
+	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, maxNNZ * sizeof(float)));
+	CUDA_CHECK_RETURN( cudaMemset(gMeanI, 0.f, gImgWidth * gImgHeight * sizeof(float)));
+	CUDA_CHECK_RETURN( cudaMemset(gN, 0.f, gImgWidth * gImgHeight * sizeof(float)));
 
 	dim3 bdim(BLOCK_DIM, BLOCK_DIM);
 	int grid_size_x = CEIL(double(gImgWidth) / BLOCK_DIM);
@@ -275,8 +282,6 @@ void refineTransmission() {
 
 	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
-
-	//multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
 
 	if (gImgChannels == 3) {
 		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
@@ -342,8 +347,13 @@ void refineTransmission() {
 
 		if (status != CUSPARSE_STATUS_SUCCESS) {
 			printf("Solve error %d\n", status);
-			//exit(-1);
 		}
+
+		float* cpu ;
+		cpu = (float*)malloc(sizeof(float) * 20);
+		cudaMemcpy(cpu, gRefineGPU, sizeof(float) * 20, cudaMemcpyDeviceToHost);
+		for (int i=0; i<20; i++)
+			printf("%f\n", cpu[i]);
 
 		inverseRefinement<<<gdim, bdim>>>(gRefineGPU, gImgWidth, gImgHeight);
 	}

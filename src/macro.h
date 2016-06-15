@@ -12,6 +12,10 @@
 #define PARAM_EPSILON 0.000001
 #define PARAM_LAMBDA 0.0001
 
+#define CONTAINER_AMOUNT 10
+
+#define __DEBUG
+
 #define CUDA_CHECK_RETURN(value) {											\
 	cudaError_t _m_cudaStat = value;										\
 	if (_m_cudaStat != cudaSuccess) {										\

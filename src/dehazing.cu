@@ -5,11 +5,17 @@
 using namespace std;
 
 float* 	gImgGPU;
+float* 	gGrayGPU;
+
+float**	g1ChannelContainerGPU;
+
 float* 	gDarkPixelGPU;
 float* 	gDarkPatchGPU;
 float*	gTransPixelGPU;
 float*	gTransPatchGPU;
-float* 	gGrayGPU;
+
+unsigned int*	gSelectedIdxGPU;
+
 int 	gImgWidth;
 int 	gImgHeight;
 int 	gImgChannels;
@@ -141,26 +147,39 @@ __global__ void kernelDoDehaze (float3* img, float* trans, float Ax, float Ay, f
 	}
 }
 
-void gpuMemInit(int width, int height, int channels, float* rawData) {
+void coreMemInit(int width, int height, int channels, float* rawData) {
 	gImgWidth = width;
 	gImgHeight = height;
 	gImgChannels = channels;
 
-	CUDA_CHECK_RETURN( cudaMalloc(&gImgGPU, width * height * channels * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gDarkPixelGPU, width * height * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gDarkPatchGPU, width * height * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gTransPixelGPU, width * height * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gTransPatchGPU, width * height * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc(&gGrayGPU, width * height * channels * sizeof(float) ) );
+	g1ChannelContainerGPU = new float*[CONTAINER_AMOUNT];
+	for (int i=0; i<CONTAINER_AMOUNT; i++) {
+		CUDA_CHECK_RETURN( cudaMalloc( (void**) &(g1ChannelContainerGPU[i]), width * height * sizeof(float)) );
+	}
+
+	CUDA_CHECK_RETURN( cudaMalloc((void**) &gImgGPU, width * height * channels * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**) &gSelectedIdxGPU, sizeof(unsigned int) * CEIL(double(gImgWidth * gImgHeight) / 1024) ) );
+	
+	gGrayGPU		= g1ChannelContainerGPU[0];
+	gDarkPatchGPU 	= g1ChannelContainerGPU[1];
+	gTransPatchGPU 	= g1ChannelContainerGPU[1];
+	gDarkPixelGPU 	= g1ChannelContainerGPU[2];
+	gTransPixelGPU 	= g1ChannelContainerGPU[2];
+	
 	CUDA_CHECK_RETURN( cudaMemcpy(gImgGPU, rawData, width * height * channels * sizeof(float), cudaMemcpyHostToDevice));
 
 	CHECK
 }
 
-void gpuMemDestroy() {
+void coreMemDestroy() {
 	CUDA_CHECK_RETURN( cudaFree(gImgGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gDarkPatchGPU) );
-	CUDA_CHECK_RETURN( cudaFree(gGrayGPU) );
+	CUDA_CHECK_RETURN( cudaFree(gSelectedIdxGPU) );
+
+	for (int i=0; i<CONTAINER_AMOUNT; i++) {
+		CUDA_CHECK_RETURN( cudaFree(g1ChannelContainerGPU[i]) );
+	}
+	
+	delete[] g1ChannelContainerGPU;
 
 	CHECK
 }
@@ -178,9 +197,6 @@ void calcDarkChannel() {
 
 	kernelDarkPatch<<<gdim, bdim>>> (gDarkPixelGPU, gDarkPatchGPU, gImgWidth, gImgHeight, WINDOW);
 	CHECK
-
-	// No need anymore
-	CUDA_CHECK_RETURN( cudaFree(gDarkPixelGPU) );
 }
 
 void calcAirLight(float* A, float* rawData) {
@@ -189,25 +205,20 @@ void calcAirLight(float* A, float* rawData) {
 	dim3 bdim(1024);
 	dim3 gdim(CEIL(double(gImgWidth * gImgHeight) / bdim.x));
 	
-	unsigned int* selectedIdx = NULL;
-	CUDA_CHECK_RETURN( cudaMalloc((void **)(&selectedIdx), sizeof(unsigned int) * gdim.x) );
-	
 	int sharedSize1 = bdim.x * (sizeof(float) + sizeof(unsigned int));
 	int sharedSize2 = gdim.x * (sizeof(float) + sizeof(unsigned int));
 	
-	kernelMaxReduction<<<gdim, bdim, sharedSize1>>> (gDarkPatchGPU, gImgWidth * gImgHeight, selectedIdx);
+	kernelMaxReduction<<<gdim, bdim, sharedSize1>>> (gDarkPatchGPU, gImgWidth * gImgHeight, gSelectedIdxGPU);
 	CHECK
 
-	kernelGetTopIntensity<<<1, gdim, sharedSize2>>> (gGrayGPU, gImgWidth * gImgHeight, selectedIdx);
+	kernelGetTopIntensity<<<1, gdim, sharedSize2>>> (gGrayGPU, gImgWidth * gImgHeight, gSelectedIdxGPU);
 	CHECK
 
 	unsigned int resultIdx;
-	CUDA_CHECK_RETURN( cudaMemcpy(&resultIdx, selectedIdx, sizeof(unsigned int), cudaMemcpyDeviceToHost) );
+	CUDA_CHECK_RETURN( cudaMemcpy(&resultIdx, gSelectedIdxGPU, sizeof(unsigned int), cudaMemcpyDeviceToHost) );
 
 	for (int i=0; i<gImgChannels; i++) 
 		A[i] = rawData[resultIdx * gImgChannels + i];
-
-	CUDA_CHECK_RETURN( cudaFree(selectedIdx) );
 }
 
 void calcTransmission(float* A) {
@@ -223,9 +234,6 @@ void calcTransmission(float* A) {
 
 	kernelTransPatch<<<gdim, bdim>>> (gTransPixelGPU, gTransPatchGPU, gImgWidth, gImgHeight, WINDOW);
 	CHECK
-
-	// No need anymore
-	CUDA_CHECK_RETURN( cudaFree(gTransPixelGPU) );
 }
 
 void doDehaze(float* A) {

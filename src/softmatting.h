@@ -13,15 +13,18 @@
 #include "macro.h"
 
 void refineTransmission();
-void refineTransmissionLaplacian();
 void preCalcForSoftMatting();
-void initMemForSoftMatting();
+void softMattingMemInit();
+void softMattingMemDestroy();
 void fillRefineData(float* cpuData);
 
 // From core
 extern float* 	gImgGPU;
 extern float* 	gGrayGPU;
 extern float*	gTransPatchGPU;
+
+extern float**	g1ChannelContainerGPU;
+
 extern int 	gImgWidth;
 extern int 	gImgHeight;
 extern int 	gImgChannels;

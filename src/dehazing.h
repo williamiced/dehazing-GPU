@@ -10,8 +10,8 @@
 
 #include "macro.h"
 
-void gpuMemInit(int width, int height, int channels, float* rawData);
-void gpuMemDestroy();
+void coreMemInit(int width, int height, int channels, float* rawData);
+void coreMemDestroy();
 void calcDarkChannel();
 void calcAirLight(float* A, float* rawData);
 void calcTransmission(float* A);
@@ -21,11 +21,18 @@ void fillTransmissionData(float* cpuData);
 void fillDehazeData(float* cpuData);
 
 extern float* 	gImgGPU;
+extern float* 	gGrayGPU;
+
+// Real container
+extern float**	g1ChannelContainerGPU;
+
 extern float* 	gDarkPixelGPU;
 extern float* 	gDarkPatchGPU;
-extern float* 	gGrayGPU;
 extern float*	gTransPixelGPU;
 extern float*	gTransPatchGPU;
+
+extern unsigned int*	gSelectedIdxGPU;
+
 extern int 	gImgWidth;
 extern int 	gImgHeight;
 extern int 	gImgChannels;

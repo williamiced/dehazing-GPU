@@ -3,12 +3,12 @@
 float* 	gN_g;
 float* 	gMeanI_g;
 float*  gMeanI_t;
-float*  sigmai;
-float*  cross;
-float*  a;
-float*  b;
-float*  meanA;
-float*  meanB;
+float*  gSigmai;
+float*  gCross;
+float*  gA;
+float*  gB;
+float*  gMeanA;
+float*  gMeanB;
 
 __global__ void getNMatrix2(float* N, int width, int height, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -108,25 +108,19 @@ __global__ void filter(float* meanA, float* meanB, float* guidedResult, float* i
 	}
 }
 
-void initMemForGuidedFilter() {
+void guidedMemInit() {
+	gN_g 		= g1ChannelContainerGPU[2];
+	gSigmai 	= g1ChannelContainerGPU[3];
+	gCross 		= g1ChannelContainerGPU[4];
+	gA 			= g1ChannelContainerGPU[5];
+	gB 			= g1ChannelContainerGPU[6];
+	gMeanI_g	= g1ChannelContainerGPU[7];
+	gMeanI_t	= g1ChannelContainerGPU[8];
+	gMeanA 		= g1ChannelContainerGPU[7];
+	gMeanB 		= g1ChannelContainerGPU[8];
+}
 
-	// 1 * 1
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &gN_g, gImgWidth * gImgHeight * sizeof(float) ) );
-
-	// 3 * 1
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &gMeanI_g, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &gMeanI_t, gImgWidth * gImgHeight * sizeof(float) ) );
-
-	//
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &sigmai, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &cross, gImgWidth * gImgHeight * sizeof(float) ) );
-
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &a, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &b, gImgWidth * gImgHeight * sizeof(float) ) );
-
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &meanA, gImgWidth * gImgHeight * sizeof(float) ) );
-	CUDA_CHECK_RETURN( cudaMalloc((void **) &meanB, gImgWidth * gImgHeight * sizeof(float) ) );
-
+void guidedMemDestroy() {
 }
 
 void doGuidedFilter(){
@@ -136,8 +130,6 @@ void doGuidedFilter(){
 	int grid_size_x = CEIL(double(gImgWidth) / BLOCK_DIM);
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
-
-	initMemForGuidedFilter();
 
 	getNMatrix2<<<gdim, bdim>>>(gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
@@ -149,22 +141,21 @@ void doGuidedFilter(){
 	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gTransPatchGPU, gMeanI_t, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, cross, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
+	getCross<<<gdim, bdim>>>(gGrayGPU, gTransPatchGPU, gCross, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	getSigma<<<gdim, bdim>>>(gGrayGPU, sigmai, gN_g, gMeanI_g, gImgWidth, gImgHeight, WINDOW_GF);
+	getSigma<<<gdim, bdim>>>(gGrayGPU, gSigmai, gN_g, gMeanI_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 	
-	calculateLinearCoefficients<<<gdim, bdim>>>(cross, sigmai, gMeanI_g, gMeanI_t, a, b, gImgWidth, gImgHeight, WINDOW_GF); 
+	calculateLinearCoefficients<<<gdim, bdim>>>(gCross, gSigmai, gMeanI_g, gMeanI_t, gA, gB, gImgWidth, gImgHeight, WINDOW_GF); 
 	CHECK
 
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(a, meanA, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
-	getMeanMatrixSingleChannel<<<gdim, bdim>>>(b, meanB, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gA, gMeanA, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
+	getMeanMatrixSingleChannel<<<gdim, bdim>>>(gB, gMeanB, gN_g, gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
 
-	filter<<<gdim, bdim>>>(meanA, meanB, gTransPatchGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW_GF);
+	filter<<<gdim, bdim>>>(gMeanA, gMeanB, gTransPatchGPU, gGrayGPU ,gImgWidth, gImgHeight, WINDOW_GF);
 	CHECK
-
 }
 
 void fillGuidedData(float* cpuData) {

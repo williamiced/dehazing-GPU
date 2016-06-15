@@ -9,7 +9,7 @@ OBJ=obj
 BIN=bin
 SRC=src
 
-CUDAFLAGS=-lcufft -lcusolver -lcusparse
+CUDAFLAGS=-lcusolver -lcusparse
 
 ifdef EMU
 CUDAFLAGS+=-deviceemu 
@@ -25,12 +25,12 @@ all:
 	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/guided_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
 
 run:
-	#$(BIN)/dehazing -o output.png -i img/city2.jpg
-	#$(BIN)/dehazing -o output.png -i img/city.jpeg
-	#$(BIN)/dehazing -o output.png -i img/forest.jpg
-	$(BIN)/dehazing -o output.png -i img/forest_small.jpg
-	#$(BIN)/dehazing -o output.png -i img/forest_tiny.jpg
-	#$(BIN)/dehazing -o output.png -i img/rock.png
+	#$(BIN)/dehazing -i img/city2.jpg
+	#$(BIN)/dehazing -i img/city.jpeg
+	#$(BIN)/dehazing  -i img/forest.jpg
+	$(BIN)/dehazing -i img/forest_small.jpg
+	#$(BIN)/dehazing -i img/forest_tiny.jpg
+	#$(BIN)/dehazing -i img/rock.png
 
 clean:
 	rm -f $(OBJ)/* $(BIN)/*
