@@ -154,8 +154,10 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	int half = (window-1)/2;
 
 	int count = 0;
-	for (int x = max(rightX - 2 * half, 0); x <= min(leftX + 2 * half, width-1); x++) {
-		for (int y = max(iy - 2 * half, 0); y <= min(jy + 2 * half, height-1); y++) {
+
+
+	for (int x = max(rightX - half, 1); x <= min(leftX + half, width-2); x++) {
+		for (int y = max(iy - half, 1); y <= min(jy + half, height-2); y++) {
 			count++;
 			float delta = (i == j ? 1.f : 0.f);
 			int k = y * width + x; // Current window center
@@ -172,24 +174,23 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channelsSquare + c2*channels + c1];
 				currentTerm += tmpVal * (Ij[c1] - Mu[k*channels + c1]);
 			}
+			if (i == 3 && j == 2) {
+				printf("currentTerm (%d %d): %f\n", x, y, currentTerm);
+			}
 			total += delta - invWeight * ( 1 + currentTerm );
 		}
 	}
 
 	// Get location of L
-	bool isFind = false;
 	for (int idx=csrRowPtr[i]; idx<csrRowPtr[i+1]; idx++) {
 		if (csrColInd[idx] == j) {
 			if (i == j)
 				L[idx] = PARAM_LAMBDA + total;
 			else
 				L[idx] = total;
-			isFind = true;
 			break;
 		} 
 	}
-	if (!isFind) 
-		printf("WTF: find %d from ColInd: %d ~ %d\n", j, csrRowPtr[i], csrRowPtr[i+1]);
 }
 
 void softMattingMemInit() {
@@ -256,6 +257,15 @@ void preCalcForSoftMatting() {
 		}
 		rowPtr.push_back(gNNZ);
 	}
+
+	printf("rowPtr:\n");
+	for(int i=0; i<10; i++)
+		printf("%d ", rowPtr[i]);
+	printf("\n");
+	printf("ColInd:\n");
+	for(int i=0; i<20; i++)
+		printf("%d ", colInd[i]);
+	printf("\n");
 
 	CUDA_CHECK_RETURN( cudaMemcpy(gCsrRowPtr, &rowPtr[0], sizeof(int) * (m+1), cudaMemcpyHostToDevice) );
 	CUDA_CHECK_RETURN( cudaMemcpy(gCsrColInd, &colInd[0], sizeof(int) * gNNZ, cudaMemcpyHostToDevice) );
