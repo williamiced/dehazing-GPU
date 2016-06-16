@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cufft.h>
@@ -30,6 +31,7 @@ extern int 	gImgHeight;
 extern int 	gImgChannels;
 
 // For soft matting
+extern float* gImgScaleGPU;
 extern float* gRefineGPU;
 extern float* gN;
 extern float* gMeanI;

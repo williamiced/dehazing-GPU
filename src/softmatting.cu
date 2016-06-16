@@ -1,5 +1,6 @@
 #include "softmatting.h"
 
+float* 	gImgScaleGPU;
 float* 	gRefineGPU;
 float* 	gN;
 float* 	gMeanI;
@@ -9,6 +10,17 @@ int*	gCsrRowPtr;
 int* 	gCsrColInd;
 float* 	gLapVal;
 int 	gRowEleCount;
+int 	gNNZ;
+
+__global__ void scaleImg(float* ori, float* out, int width, int channels, int height) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int i = y * width + x;
+	if(x < width && y < height) {
+		for (int c=0; c<channels; c++)
+			out[i * channels + c] = ori[i * channels + c] / 255.f;
+	}
+}
 
 __global__ void getNMatrix(float* N, int width, int height, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -16,10 +28,9 @@ __global__ void getNMatrix(float* N, int width, int height, int window) {
 	const int i = y * width + x;
 	if(x < width && y < height) {
 		float total = 0.f;
-		for(int startx = 0; startx < window * 2 + 1; startx++) {
-			for(int starty = 0; starty < window * 2 + 1; starty++) {
-				int cx = x-window+startx;
-				int cy = y-window+starty;
+		int half = window-1;
+		for(int cx = x - half/2; cx <= x + half/2; cx++) {
+			for(int cy = y - half/2; cy <= y + half/2; cy++) {
 				if(IN_GRAPH(cx, cy, width, height)) 
 					total += 1.f;
 			}
@@ -34,10 +45,9 @@ __global__ void getMeanMatrix(float* I, float* meanI, float* N, int width, int h
 	const int i = y * width + x;
 	if(x < width && y < height) {
 		float total[3] = {0.f};
-		for(int startx = 0; startx < window * 2 + 1; startx++) {
-			for(int starty = 0; starty < window * 2 + 1; starty++) {
-				int cx = x-window+startx;
-				int cy = y-window+starty;
+		int half = window-1;
+		for(int cx = x - half/2; cx <= x + half/2; cx++) {
+			for(int cy = y - half/2; cy <= y + half/2; cy++) {
 				if(IN_GRAPH(cx, cy, width, height)) {
 					int newI = cy * width + cx;
 					for (int c=0; c<channels; c++)
@@ -56,13 +66,13 @@ __global__ void getCovMatrix(float* I, float* meanI, float* covI, float* N, int 
 	const int i = y * width + x;
 	if(x < width && y < height) {
 		float total[9] = {0.f};
-		for(int startx = 0; startx < window * 2 + 1; startx++) {
-			for(int starty = 0; starty < window * 2 + 1; starty++) {
-				int cx = x-window+startx;
-				int cy = y-window+starty;
+
+		int half = window-1;
+		for(int cx = x - half/2; cx <= x + half/2; cx++) {
+			for(int cy = y - half/2; cy <= y + half/2; cy++) {
 				if(IN_GRAPH(cx, cy, width, height)) {
 					int newI = cy * width + cx;
-					for(int c1=0; c1<channels; c1++) {
+					for (int c1=0; c1<channels; c1++) {
 						for (int c2=c1; c2<channels; c2++) {
 							total[c1*channels + c2] += (I[newI * channels + c1] - meanI[i * channels + c1]) 
 														* (I[newI * channels + c2] - meanI[i * channels + c2]);
@@ -80,7 +90,7 @@ __global__ void getCovMatrix(float* I, float* meanI, float* covI, float* N, int 
 					covI[i * channelsSquare + c1 * channels + c2] = total[c2 * channels + c1] / N[i];
 			}
 		}
-	}	
+	}
 }
 
 __global__ void calcInvCovTerm(float* covI, float* invCov, float* N, int width, int height, int channels, int window) {
@@ -114,49 +124,6 @@ __global__ void calcInvCovTerm(float* covI, float* invCov, float* N, int width, 
 	}
 }
 
-__global__ void multiplyLambda(float* T, int width, int height) {
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
-	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-	const int i = y * width + x;
-	if(x < width && y < height) {
-		T[i] *= PARAM_LAMBDA;
-	}
-}
-
-__global__ void fillSparseStructure(int* csrRowPtr, int* csrColInd, int width, int height, int channels, int rowEleCount, int w) {
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
-	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-	const int i = y * width + x;
-
-	w *= 2;
-	if (x < width && y < height) {
-		// Previous rows total
-		int firstRow = rowEleCount * ( min(y, w) * (w+1) + (0 + min( y-1, w-1)) * min(y, w) / 2);
-		int mediumRow = rowEleCount * (2*w + 1) * min ( max(y-w, 0), height - 2*w );
-		int lastRow = rowEleCount * ( max( w + y - height, 0) * (w+1) + (w-1 + min(height - y, w)) * max( w + y - height, 0) / 2 );
-
-		// Current row position
-		int currentRowRange = y < w ? (w+1+y) : (y >= (height-w) ? (w+height-y) : (2*w+1) );
-
-		int firstEle = min(x, w) * (w+1) + (0 + min(x-1, w-1)) * min(x, w) / 2;
-		int mediumEle = (2*w+1) * min ( max(x-w, 0), width - 2*w );
-		int lastEle = max( w + x - width, 0) * (w+1) + (w-1 + min(width - x, w)) * max( w + x - width, 0) / 2;
-
-		int startIdx = firstRow + mediumRow + lastRow + currentRowRange * (firstEle + mediumEle + lastEle);
-		int currentColRange = x < w ? (w+1+x) : (x >= (width-w) ? (w+width-x) : (2*w+1) );
-
-		int lx = max(x-w, 0);
-		int ty = max(y-w, 0);
-
-		csrRowPtr[i] = startIdx;
-
-		for(int j = 0; j<currentColRange * currentRowRange; j++) 
-			csrColInd[startIdx + j] = (j / currentColRange + ty) * width + (j % currentColRange + lx);
-		if (x == width-1 && y == height-1) 
-			csrRowPtr[i+1] = startIdx + currentColRange * currentRowRange;
-	} 
-}
-
 __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int* csrRowPtr, int* csrColInd, float* L, int width, int height, int channels, int window) {
 	const int i = blockIdx.x * blockDim.x + threadIdx.x;
 	const int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -169,12 +136,12 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	const int size = width * height;
 
 	// I must be smaller than J to get upper triangular Laplacian matrix
-	// As a result, we know jy >= iy
-	if (i >= size || j >= size || i > j) 
+	// As a result, we know jy <= iy
+	if (i >= size || j >= size || i < j) 
 		return;
 
 	// If distance of I and J is too large, that means there will be no window cover both I and J, so could be ignored
-	if (abs(ix-jx) > 2 * window || abs(iy-jy) > 2 * window) 
+	if (abs(ix-jx) >= window || abs(iy-jy) >= window) 
 		return;
 
 	float total = 0.f;
@@ -183,8 +150,13 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	int leftX = ix < jx ? ix : jx;
 	int rightX = (leftX == ix ? jx : ix);
 
-	for (int x = max(rightX-window, 0); x <= min(leftX+window, width-1); x++) {
-		for (int y = max(jy-window, 0); y <= min(iy+window, height-1); y++) {
+	int channelsSquare = channels * channels;
+	int half = (window-1)/2;
+
+	int count = 0;
+	for (int x = max(rightX - 2 * half, 0); x <= min(leftX + 2 * half, width-1); x++) {
+		for (int y = max(iy - 2 * half, 0); y <= min(jy + 2 * half, height-1); y++) {
+			count++;
 			float delta = (i == j ? 1.f : 0.f);
 			int k = y * width + x; // Current window center
 			float invWeight = 1.f / N[k];
@@ -197,7 +169,7 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 			for(int c1=0; c1<channels; c1++) {
 				float tmpVal = 0.f;
 				for (int c2=0; c2<channels; c2++) 
-					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channels*channels + c2*channels + c1];
+					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channelsSquare + c2*channels + c1];
 				currentTerm += tmpVal * (Ij[c1] - Mu[k*channels + c1]);
 			}
 			total += delta - invWeight * ( 1 + currentTerm );
@@ -205,32 +177,26 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	}
 
 	// Get location of L
-
-	int lx = max(ix-2*window, 0);
-	int rx = min(ix+2*window, width-1);
-	int ly = max(iy-2*window, 0);
-
-	int offset = (jy-ly) * (rx-lx+1) + (jx-lx); // yOffset * rangeWidth + xOffset
-	int idx = csrRowPtr[i] + offset;
-
-	if (i == j)
-		L[idx] = PARAM_LAMBDA + total;
-	else
-		L[idx] = total;
-}
-
-__global__ void inverseRefinement(float* r, int width, int height) {
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
-	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-	const int i = y * width + x;
-	if(x < width && y < height) {
-		r[i] = (255.f - r[i]) / 255.f;
+	bool isFind = false;
+	for (int idx=csrRowPtr[i]; idx<csrRowPtr[i+1]; idx++) {
+		if (csrColInd[idx] == j) {
+			if (i == j)
+				L[idx] = PARAM_LAMBDA + total;
+			else
+				L[idx] = total;
+			isFind = true;
+			break;
+		} 
 	}
+	if (!isFind) 
+		printf("WTF: find %d from ColInd: %d ~ %d\n", j, csrRowPtr[i], csrRowPtr[i+1]);
 }
 
 void softMattingMemInit() {
 	gRefineGPU	= g1ChannelContainerGPU[2];
 	gN 			= g1ChannelContainerGPU[3];
+
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gImgScaleGPU, gImgWidth * gImgHeight * gImgChannels * sizeof(float) ) );
 
 	// 3 * 1
 	CUDA_CHECK_RETURN( cudaMalloc((void**)&gMeanI, gImgWidth * gImgHeight * gImgChannels * sizeof(float) ) );
@@ -239,14 +205,15 @@ void softMattingMemInit() {
 	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
 	CUDA_CHECK_RETURN( cudaMalloc((void**)&gInvCovI, gImgWidth * gImgHeight * gImgChannels * gImgChannels * sizeof(float) ) );
 
-	int nnz = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
+	int maxNNZ = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
 	// Sparse Matrix Structure
 	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCsrRowPtr, (gImgWidth * gImgHeight + 1) * sizeof(int) ) );	
-	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCsrColInd, nnz * sizeof(int) ) );
-	CUDA_CHECK_RETURN( cudaMalloc((void**)&gLapVal, nnz * sizeof(float) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gCsrColInd, maxNNZ * sizeof(int) ) );
+	CUDA_CHECK_RETURN( cudaMalloc((void**)&gLapVal, maxNNZ * sizeof(float) ) );
 }
 
 void softMattingMemDestroy() {
+	CUDA_CHECK_RETURN( cudaFree(gImgScaleGPU) );
 	CUDA_CHECK_RETURN( cudaFree(gMeanI) );
 	CUDA_CHECK_RETURN( cudaFree(gCovI) );
 	CUDA_CHECK_RETURN( cudaFree(gInvCovI) );
@@ -256,107 +223,191 @@ void softMattingMemDestroy() {
 }
 
 void preCalcForSoftMatting() {
-	gRowEleCount = 0;
-	for (int i=0; i<gImgWidth; i++)
-		gRowEleCount += (2*WINDOW_SM+1) + min(i, min(2*WINDOW_SM, gImgWidth-1-i));
+	int m = gImgWidth * gImgHeight;
+	int half = (WINDOW_SM-1) / 2;
+	
+	// Calculate RowPtr and ColInd
+	std::vector<int> rowPtr;
+	std::vector<int> colInd;
+
+	gNNZ = 0;
+	rowPtr.push_back(gNNZ);
+	for (int i=0; i<m; i++) {
+		int ix = i % gImgWidth;
+		int iy = i / gImgWidth;
+		int minx = max(ix - 2 * half, 0);
+		int maxx = min(ix + 2 * half, gImgWidth-1);
+		int miny = max(iy - 2 * half, 0);
+		int maxy = min(iy + 2 * half, gImgHeight-1);
+		
+		bool needStop = false;
+		for (int y=miny; y<=maxy; y++) {
+			for (int x=minx; x<=maxx; x++) {
+				int cur = y * gImgWidth + x;
+				colInd.push_back(cur);
+				gNNZ++;
+				if (cur == i) {
+					needStop = true;
+					break;
+				}
+			}
+			if (needStop)
+				break;
+		}
+		rowPtr.push_back(gNNZ);
+	}
+
+	CUDA_CHECK_RETURN( cudaMemcpy(gCsrRowPtr, &rowPtr[0], sizeof(int) * (m+1), cudaMemcpyHostToDevice) );
+	CUDA_CHECK_RETURN( cudaMemcpy(gCsrColInd, &colInd[0], sizeof(int) * gNNZ, cudaMemcpyHostToDevice) );
+
+	printf("gNNZ: %d\n", gNNZ);
+}
+
+void show2Darray(float* arrGPU, int size, int width, int height, int channels) {
+	int total = width * height * channels;
+	float* arrCPU = (float*)	malloc(sizeof(float) * total);
+	cudaMemcpy(arrCPU, arrGPU, sizeof(float) * total, cudaMemcpyDeviceToHost);
+	for (int y=0; y<size; y++) {
+		for (int c=0; c<channels; c++) {
+				printf("%d:%d\t", y, c);
+			for (int x=0; x<size; x++) {
+				printf("%f\t", arrCPU[channels * (y * width + x) + c]);
+			}
+			printf("\n");
+		}
+		
+	}
+	printf("\n");
+	free(arrCPU);
+}
+
+void showLaplacian() {
+	float* 	cpuLap = (float*)	malloc(sizeof(float) * gNNZ);
+	int* 	cpuRow = (int*)		malloc(sizeof(int) * gImgWidth * gImgHeight);
+	int*	cpuCol = (int*)		malloc(sizeof(int) * gNNZ);
+	cudaMemcpy(cpuLap, gLapVal, sizeof(float) * gNNZ, cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpuRow, gCsrRowPtr, sizeof(int) * gImgWidth * gImgHeight, cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpuCol, gCsrColInd, sizeof(int) * gNNZ, cudaMemcpyDeviceToHost);
+
+	printf("Laplacian: \n");
+	for (int y=0; y<10; y++) {
+		int offset = 0;
+		for (int x=0; x<10; x++) {
+			if (cpuCol[cpuRow[y] + offset] == x) {
+				printf("%f\t", cpuLap[cpuRow[y] + offset]);
+				offset++;
+			} else {
+				printf("%f\t", 0.f);
+			}
+		}
+		printf("\n");
+	}
+}
+
+void solveLinearSystem() {
+	int m = gImgWidth * gImgHeight;
+	float alpha = (float) PARAM_LAMBDA;
+
+	cusparseHandle_t cuSparseHandle;
+	cusparseMatDescr_t descr;
+	cusparseSolveAnalysisInfo_t info;
+
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreate (&cuSparseHandle) );
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreateMatDescr (&descr) );
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatFillMode (descr, CUSPARSE_FILL_MODE_LOWER) );
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatIndexBase (descr, CUSPARSE_INDEX_BASE_ZERO) );
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatType (descr, CUSPARSE_MATRIX_TYPE_TRIANGULAR) );
+	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreateSolveAnalysisInfo (&info) );
+
+	cudaMemset(gRefineGPU, 0.f, sizeof(float) * m);
+
+	cusparseStatus_t status;
+	status = cusparseScsrsv_analysis(cuSparseHandle, 
+		CUSPARSE_OPERATION_NON_TRANSPOSE,
+		m, // m
+		gNNZ, // nnz
+		descr, // cusparseMatDescr_t
+		gLapVal,
+		gCsrRowPtr,
+		gCsrColInd,
+		info
+	);
+
+	if (status != CUSPARSE_STATUS_SUCCESS) {
+		printf("Analysis error\n");
+		exit(-1);
+	}
+	CHECK
+
+	status = cusparseScsrsv_solve(cuSparseHandle, 
+		CUSPARSE_OPERATION_NON_TRANSPOSE,
+		m, // m
+		&alpha, // alpha
+		descr,
+		gLapVal,
+		gCsrRowPtr,
+		gCsrColInd,
+		info, 
+		gTransPatchGPU, // b
+		gRefineGPU // X
+	);
+	CHECK
+
+	if (status != CUSPARSE_STATUS_SUCCESS) {
+		printf("Solve error %d\n", status);
+		exit(-1);
+	}
+
+	showLaplacian();
 }
 
 void refineTransmission() {
 	SETUP_TIMER
-
-	int maxNNZ = gImgWidth * gImgHeight * (WINDOW_SM * 4 + 1) * (WINDOW_SM * 4 + 1);	
-	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, maxNNZ * sizeof(float)));
-	CUDA_CHECK_RETURN( cudaMemset(gMeanI, 0.f, gImgWidth * gImgHeight * sizeof(float)));
-	CUDA_CHECK_RETURN( cudaMemset(gN, 0.f, gImgWidth * gImgHeight * sizeof(float)));
 
 	dim3 bdim(BLOCK_DIM, BLOCK_DIM);
 	int grid_size_x = CEIL(double(gImgWidth) / BLOCK_DIM);
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
+	scaleImg<<<gdim, bdim>>>(gImgGPU, gImgScaleGPU, gImgWidth, gImgHeight, gImgChannels);
+	CHECK
+
+	printf("scaleImg: \n");
+	show2Darray(gImgScaleGPU, 5, gImgWidth, gImgHeight, gImgChannels);
+
 	getNMatrix<<<gdim, bdim>>>(gN, gImgWidth, gImgHeight, WINDOW_SM);
 	CHECK
 
-	getMeanMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	printf("N: \n");
+	show2Darray(gN, 3, gImgWidth, gImgHeight, 1);
+
+	getMeanMatrix<<<gdim, bdim>>>(gImgScaleGPU, gMeanI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	getCovMatrix<<<gdim, bdim>>>(gImgGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	printf("MeanI: \n");
+	show2Darray(gMeanI, 3, gImgWidth, gImgHeight, 3);
+
+	getCovMatrix<<<gdim, bdim>>>(gImgScaleGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	if (gImgChannels == 3) {
-		calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
-		CHECK
+	printf("CovI: \n");
+	show2Darray(gCovI, 3, gImgWidth, gImgHeight, 9);
 
-		fillSparseStructure<<<gdim, bdim>>>(gCsrRowPtr, gCsrColInd, gImgWidth, gImgHeight, gImgChannels, gRowEleCount, WINDOW_SM);
-		CHECK
+	calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	CHECK
 
-		dim3 bdim_Lap(BLOCK_DIM, BLOCK_DIM);
-		int gridSize = CEIL(double(gImgWidth * gImgHeight) / BLOCK_DIM);
-		dim3 gdim_Lap(gridSize, gridSize);
-		calcLaplacian<<<gdim_Lap, bdim_Lap>>>(gImgGPU, gN, gMeanI, gInvCovI, gCsrRowPtr, gCsrColInd, gLapVal, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
-		CHECK
+	printf("InvCovI: \n");
+	show2Darray(gInvCovI, 3, gImgWidth, gImgHeight, 9);
 
-		int nnz;
-		cudaMemcpy(&nnz, gCsrRowPtr + gImgWidth * gImgHeight, sizeof(int), cudaMemcpyDeviceToHost);
-		
-		printf("NNZ: %d\n", nnz);
+	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, sizeof(float) * gNNZ) );
 
-		cusparseHandle_t cuSparseHandle;
-		cusparseMatDescr_t descr;
-		cusparseSolveAnalysisInfo_t info;
+	dim3 bdim_Lap(BLOCK_DIM, BLOCK_DIM);
+	int gridSize = CEIL(double(gImgWidth * gImgHeight) / BLOCK_DIM);
+	dim3 gdim_Lap(gridSize, gridSize);
+	calcLaplacian<<<gdim_Lap, bdim_Lap>>>(gImgScaleGPU, gN, gMeanI, gInvCovI, gCsrRowPtr, gCsrColInd, gLapVal, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	CHECK
 
-		cusparseCreate (&cuSparseHandle);
-		cusparseCreateMatDescr (&descr);
-		cusparseSetMatIndexBase (descr, CUSPARSE_INDEX_BASE_ZERO);
-		cusparseSetMatType (descr, CUSPARSE_MATRIX_TYPE_TRIANGULAR);
-		cusparseCreateSolveAnalysisInfo (&info);
-
-		int m = gImgWidth * gImgHeight;
-
-		cusparseStatus_t status;
-		status = cusparseScsrsv_analysis(cuSparseHandle, 
-			CUSPARSE_OPERATION_NON_TRANSPOSE,
-			m, // m
-			nnz, // nnz
-			descr, // cusparseMatDescr_t
-			gLapVal,
-			gCsrRowPtr,
-			gCsrColInd,
-			info
-		);
-
-		if (status != CUSPARSE_STATUS_SUCCESS) {
-			printf("Analysis error\n");
-			exit(-1);
-		}
-
-		float alpha = (float) PARAM_LAMBDA;
-
-		status = cusparseScsrsv_solve(cuSparseHandle, 
-			CUSPARSE_OPERATION_NON_TRANSPOSE,
-			m, // m
-			&alpha, // alpha
-			descr,
-			gLapVal,
-			gCsrRowPtr,
-			gCsrColInd,
-			info, 
-			gTransPatchGPU, // b
-			gRefineGPU // X
-		);
-
-		if (status != CUSPARSE_STATUS_SUCCESS) {
-			printf("Solve error %d\n", status);
-		}
-
-		float* cpu ;
-		cpu = (float*)malloc(sizeof(float) * 20);
-		cudaMemcpy(cpu, gRefineGPU, sizeof(float) * 20, cudaMemcpyDeviceToHost);
-		for (int i=0; i<20; i++)
-			printf("%f\n", cpu[i]);
-
-		inverseRefinement<<<gdim, bdim>>>(gRefineGPU, gImgWidth, gImgHeight);
-	}
+	solveLinearSystem();
 }
 
 
