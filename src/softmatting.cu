@@ -472,6 +472,7 @@ void refineTransmission() {
 	calcInvCovTermDouble<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
+	/*
 	int size = gImgWidth * gImgHeight * gImgChannels * gImgChannels;
 	float* cpu = (float*)malloc(sizeof(float) * size);
 	cudaMemcpy(cpu, gInvCovI, sizeof(float) * size, cudaMemcpyDeviceToHost);
@@ -496,6 +497,7 @@ void refineTransmission() {
 				fprintf(fp2, "%f\n", cpu[i*9 + t]);
 	}
 	fclose(fp2);
+	*/
 
 	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, sizeof(float) * gNNZ) );
 
