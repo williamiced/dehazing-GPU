@@ -60,12 +60,12 @@ __global__ void getMeanMatrix(float* I, float* meanI, float* N, int width, int h
 	}
 }
 
-__global__ void getCovMatrix(float* I, float* meanI, float* covI, float* N, int width, int height, int channels, int window) {
+__global__ void getCovMatrixDouble(float* I, float* meanI, float* covI, float* N, int width, int height, int channels, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
 	if(x < width && y < height) {
-		float total[9] = {0.f};
+		double total[9] = {0.f};
 
 		int half = window-1;
 		for(int cx = x - half/2; cx <= x + half/2; cx++) {
@@ -74,8 +74,8 @@ __global__ void getCovMatrix(float* I, float* meanI, float* covI, float* N, int 
 					int newI = cy * width + cx;
 					for (int c1=0; c1<channels; c1++) {
 						for (int c2=c1; c2<channels; c2++) {
-							total[c1*channels + c2] += (I[newI * channels + c1] - meanI[i * channels + c1]) 
-														* (I[newI * channels + c2] - meanI[i * channels + c2]);
+							total[c1*channels + c2] += static_cast<double>(I[newI * channels + c1] - meanI[i * channels + c1]) 
+														* static_cast<double>(I[newI * channels + c2] - meanI[i * channels + c2]);
 						}
 					}
 				}
@@ -85,31 +85,37 @@ __global__ void getCovMatrix(float* I, float* meanI, float* covI, float* N, int 
 		for (int c1=0; c1<channels; c1++) {
 			for (int c2=0; c2<channels; c2++) {
 				if (c1 <= c2)
-					covI[i * channelsSquare + c1 * channels + c2] = total[c1 * channels + c2] / N[i];
+					covI[i * channelsSquare + c1 * channels + c2] = static_cast<float>(total[c1 * channels + c2] / static_cast<double>(N[i]));
 				else
-					covI[i * channelsSquare + c1 * channels + c2] = total[c2 * channels + c1] / N[i];
+					covI[i * channelsSquare + c1 * channels + c2] = static_cast<float>(total[c2 * channels + c1] / static_cast<double>(N[i]));
 			}
 		}
 	}
 }
 
-__global__ void calcInvCovTerm(float* covI, float* invCov, float* N, int width, int height, int channels, int window) {
+__global__ void calcInvCovTermDouble(float* covI, float* invCov, float* N, int width, int height, int channels, int window) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 	const int i = y * width + x;
+	const int startIdx = i * channels * channels;
 	if(x < width && y < height) {
-		float* cov = covI + i * channels * channels;
-		float* icov = invCov + i * channels * channels;
-
 		// Plus Epsilon U3
-		float weight = PARAM_EPSILON / N[i];
+		double weight = PARAM_EPSILON / N[i];
+		double cov[9];
+		double icov[9];
+		
+		for (int t=0; t<channels * channels; t++) {
+			cov[t] = static_cast<double>(covI[startIdx + t]);
+			icov[t] = static_cast<double>(invCov[startIdx + t]);
+		}
+		
 		cov[0] += weight;
 		cov[4] += weight;
 		cov[8] += weight;
 
 		// Find inverse determinant
-		float det = cov[0] * (cov[4] * cov[8] - cov[5] * cov[7]) - cov[1] * (cov[3] * cov[8] - cov[5] * cov[6]) + cov[2] * (cov[3] * cov[7] - cov[4] * cov[6]);
-		float idet = 1 / det;
+		double det = cov[0] * (cov[4] * cov[8] - cov[5] * cov[7]) - cov[1] * (cov[3] * cov[8] - cov[5] * cov[6]) + cov[2] * (cov[3] * cov[7] - cov[4] * cov[6]);
+		double idet = 1.f / det;
 
 		// Calculate inverse factor
 		icov[0] = (cov[4] * cov[8] - cov[5] * cov[7]) * idet;
@@ -121,6 +127,11 @@ __global__ void calcInvCovTerm(float* covI, float* invCov, float* N, int width, 
 		icov[6] = (cov[3] * cov[7] - cov[4] * cov[6]) * idet;
 		icov[7] = (cov[1] * cov[6] - cov[0] * cov[7]) * idet;
 		icov[8] = (cov[0] * cov[4] - cov[1] * cov[3]) * idet;
+
+
+		for (int t=0; t<9; t++) {
+			invCov[startIdx + t] = static_cast<float>(icov[t]);
+		}
 	}
 }
 
@@ -137,8 +148,11 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 
 	// I must be smaller than J to get upper triangular Laplacian matrix
 	// As a result, we know jy <= iy
-	if (i >= size || j >= size || i < j) 
+	if (i >= size || j >= size) 
 		return;
+
+	//if (i<j)
+	//	return;
 
 	// If distance of I and J is too large, that means there will be no window cover both I and J, so could be ignored
 	if (abs(ix-jx) >= window || abs(iy-jy) >= window) 
@@ -149,6 +163,8 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	float* Ij = I + j * channels;
 	int leftX = ix < jx ? ix : jx;
 	int rightX = (leftX == ix ? jx : ix);
+	int topY = iy < jy ? iy : jy;
+	int bottomY = (topY == iy ? jy : iy);
 
 	int channelsSquare = channels * channels;
 	int half = (window-1)/2;
@@ -157,7 +173,7 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 
 
 	for (int x = max(rightX - half, 1); x <= min(leftX + half, width-2); x++) {
-		for (int y = max(iy - half, 1); y <= min(jy + half, height-2); y++) {
+		for (int y = max(bottomY - half, 1); y <= min(topY + half, height-2); y++) {
 			count++;
 			float delta = (i == j ? 1.f : 0.f);
 			int k = y * width + x; // Current window center
@@ -173,9 +189,6 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 				for (int c2=0; c2<channels; c2++) 
 					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channelsSquare + c2*channels + c1];
 				currentTerm += tmpVal * (Ij[c1] - Mu[k*channels + c1]);
-			}
-			if (i == 3 && j == 2) {
-				printf("currentTerm (%d %d): %f\n", x, y, currentTerm);
 			}
 			total += delta - invWeight * ( 1 + currentTerm );
 		}
@@ -247,25 +260,19 @@ void preCalcForSoftMatting() {
 				int cur = y * gImgWidth + x;
 				colInd.push_back(cur);
 				gNNZ++;
+				/*
 				if (cur == i) {
 					needStop = true;
 					break;
 				}
+				*/
+				
 			}
 			if (needStop)
 				break;
 		}
 		rowPtr.push_back(gNNZ);
 	}
-
-	printf("rowPtr:\n");
-	for(int i=0; i<10; i++)
-		printf("%d ", rowPtr[i]);
-	printf("\n");
-	printf("ColInd:\n");
-	for(int i=0; i<20; i++)
-		printf("%d ", colInd[i]);
-	printf("\n");
 
 	CUDA_CHECK_RETURN( cudaMemcpy(gCsrRowPtr, &rowPtr[0], sizeof(int) * (m+1), cudaMemcpyHostToDevice) );
 	CUDA_CHECK_RETURN( cudaMemcpy(gCsrColInd, &colInd[0], sizeof(int) * gNNZ, cudaMemcpyHostToDevice) );
@@ -314,10 +321,20 @@ void showLaplacian() {
 	}
 }
 
+__global__ void multiplyLambda(float* T, int width, int height) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int i = y * width + x;
+	if(x < width && y < height) {
+		T[i] *= PARAM_LAMBDA;
+	}
+}
+
 void solveLinearSystem() {
 	int m = gImgWidth * gImgHeight;
 	float alpha = (float) PARAM_LAMBDA;
 
+	/*
 	cusparseHandle_t cuSparseHandle;
 	cusparseMatDescr_t descr;
 	cusparseSolveAnalysisInfo_t info;
@@ -367,6 +384,66 @@ void solveLinearSystem() {
 		printf("Solve error %d\n", status);
 		exit(-1);
 	}
+	*/
+	
+	dim3 bdim(BLOCK_DIM, BLOCK_DIM);
+	int grid_size_x = CEIL(double(gImgWidth) / BLOCK_DIM);
+	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
+	dim3 gdim(grid_size_x, grid_size_y);
+
+	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
+
+	cusolverSpHandle_t gSpSolver;
+	assert( CUSOLVER_STATUS_SUCCESS == cusolverSpCreate(&gSpSolver) );
+	
+	cudaMemset(gRefineGPU, 0.f, m * sizeof(float));
+	
+	cusparseMatDescr_t descr;
+	cusparseCreateMatDescr(&descr);
+	cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+	cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+	int singularity = 0;
+
+	float* 	cpuLap = (float*) malloc(sizeof(float) * gNNZ);
+	int*	cpuRowPtr = (int*) malloc(sizeof(int) * (m+1) );
+	int*	cpuColInd = (int*) malloc(sizeof(int) * gNNZ);
+	float*	cpuB = (float*) malloc(sizeof(float) * m);
+	float*	cpuX = (float*) malloc(sizeof(float) * m);
+
+	cudaMemcpy(cpuLap, gLapVal, sizeof(float) * gNNZ, cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpuRowPtr, gCsrRowPtr, sizeof(int) * (m+1), cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpuColInd, gCsrColInd, sizeof(int) * gNNZ, cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpuB, gTransPatchGPU, sizeof(float) * m, cudaMemcpyDeviceToHost);
+	
+	/*
+	cusolverSpScsrlsvluHost(gSpSolver,
+		m, 
+		gNNZ, 
+		descr,
+		cpuLap, 
+		cpuRowPtr,
+		cpuColInd,
+		cpuB,
+		1e-5,
+		0,
+		cpuX,
+		&singularity);
+	*/	
+	//cudaMemcpy(gRefineGPU, cpuX, sizeof(float) * m, cudaMemcpyHostToDevice);
+	
+	cusolverSpScsrlsvqr(gSpSolver, 
+		m, // n
+		gNNZ, // nnzA
+		descr, // cusparseMatDescr_t
+		gLapVal,
+		gCsrRowPtr,
+		gCsrColInd,
+		gTransPatchGPU, // b
+		1e-5, // tol
+		0, // reorder
+		gRefineGPU, 
+		&singularity);
+	
 
 	showLaplacian();
 }
@@ -382,32 +459,43 @@ void refineTransmission() {
 	scaleImg<<<gdim, bdim>>>(gImgGPU, gImgScaleGPU, gImgWidth, gImgHeight, gImgChannels);
 	CHECK
 
-	printf("scaleImg: \n");
-	show2Darray(gImgScaleGPU, 5, gImgWidth, gImgHeight, gImgChannels);
-
 	getNMatrix<<<gdim, bdim>>>(gN, gImgWidth, gImgHeight, WINDOW_SM);
 	CHECK
-
-	printf("N: \n");
-	show2Darray(gN, 3, gImgWidth, gImgHeight, 1);
 
 	getMeanMatrix<<<gdim, bdim>>>(gImgScaleGPU, gMeanI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	printf("MeanI: \n");
-	show2Darray(gMeanI, 3, gImgWidth, gImgHeight, 3);
-
-	getCovMatrix<<<gdim, bdim>>>(gImgScaleGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	getCovMatrixDouble<<<gdim, bdim>>>(gImgScaleGPU, gMeanI, gCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	printf("CovI: \n");
-	show2Darray(gCovI, 3, gImgWidth, gImgHeight, 9);
-
-	calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	//calcInvCovTerm<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
+	calcInvCovTermDouble<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	printf("InvCovI: \n");
-	show2Darray(gInvCovI, 3, gImgWidth, gImgHeight, 9);
+	int size = gImgWidth * gImgHeight * gImgChannels * gImgChannels;
+	float* cpu = (float*)malloc(sizeof(float) * size);
+	cudaMemcpy(cpu, gInvCovI, sizeof(float) * size, cudaMemcpyDeviceToHost);
+	FILE* fp = fopen("MyInv.txt", "w+");
+	for (int i=0; i<size; i++) {
+		int ix = i % gImgWidth;
+		int iy = i / gImgWidth;
+		if (ix > 0 && ix < gImgWidth-1 && iy > 0 && iy < gImgHeight-1) {
+			for (int t=0;t<9; t++)
+				fprintf(fp, "%f\n", cpu[i*9 + t]);
+		}
+	}
+	fclose(fp);
+	
+	cudaMemcpy(cpu, gCovI, sizeof(float) * size, cudaMemcpyDeviceToHost);
+	FILE* fp2 = fopen("MyCov.txt", "w+");
+	for (int i=0; i<size; i++) {
+		int ix = i % gImgWidth;
+		int iy = i / gImgWidth;
+		if (ix > 0 && ix < gImgWidth-1 && iy > 0 && iy < gImgHeight-1)
+			for (int t=0; t<9; t++)
+				fprintf(fp2, "%f\n", cpu[i*9 + t]);
+	}
+	fclose(fp2);
 
 	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, sizeof(float) * gNNZ) );
 
