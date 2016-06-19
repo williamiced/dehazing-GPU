@@ -147,7 +147,7 @@ __global__ void kernelDoDehaze (float3* img, float* trans, float Ax, float Ay, f
 	}
 }
 
-void coreMemInit(int width, int height, int channels, float* rawData) {
+void coreMemInit(int width, int height, int channels) {
 	gImgWidth = width;
 	gImgHeight = height;
 	gImgChannels = channels;
@@ -165,9 +165,10 @@ void coreMemInit(int width, int height, int channels, float* rawData) {
 	gTransPatchGPU 	= g1ChannelContainerGPU[1];
 	gDarkPixelGPU 	= g1ChannelContainerGPU[2];
 	gTransPixelGPU 	= g1ChannelContainerGPU[2];
-	
-	CUDA_CHECK_RETURN( cudaMemcpy(gImgGPU, rawData, width * height * channels * sizeof(float), cudaMemcpyHostToDevice));
+}
 
+void setData(float* data) {
+	CUDA_CHECK_RETURN( cudaMemcpy(gImgGPU, data, gImgWidth * gImgHeight * gImgChannels * sizeof(float), cudaMemcpyHostToDevice));
 	CHECK
 }
 

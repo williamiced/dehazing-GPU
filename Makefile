@@ -25,12 +25,16 @@ all:
 	$(CXX) $(COMPILE_FLAGS) $(SRC)/main.cpp $(OBJ)/main_kernel.o $(OBJ)/guided_kernel.o $(OBJ)/matting_kernel.o $(OBJ)/HazeRemover.o -o $(BIN)/dehazing $(CFLAGS) $(LDFLAGS) $(CUDAFLAGS) 
 
 run:
+	#$(BIN)/dehazing -i video/cross.avi
+	#$(BIN)/dehazing -i video/hazeroad.avi
+	$(BIN)/dehazing -i video/riverside.avi
 	#$(BIN)/dehazing -i img/city2.jpg
 	#$(BIN)/dehazing -i img/city.jpeg
-	#$(BIN)/dehazing  -i img/forest.jpg
-	$(BIN)/dehazing -i img/forest_small.jpg
+	#$(BIN)/dehazing -i img/forest.jpg
+	#$(BIN)/dehazing -i img/forest_small.jpg
 	#$(BIN)/dehazing -i img/forest_tiny.jpg
 	#$(BIN)/dehazing -i img/rock.png
+	#$(BIN)/dehazing -i img/rock_small.png
 
 clean:
 	rm -f $(OBJ)/* $(BIN)/*

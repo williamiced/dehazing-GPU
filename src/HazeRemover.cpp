@@ -10,6 +10,12 @@ int HazeRemover::getLoopCount() {
 	} else {
 		mVideoCapture = new VideoCapture(mInputFilePath);
 		mIsVideo = true;
+		mVideoWriter = new VideoWriter("Dehaze.avi", 
+							CV_FOURCC('D', 'I', 'V', 'X'), 
+							mVideoCapture->get(CV_CAP_PROP_FPS), 
+							Size(mVideoCapture->get(CV_CAP_PROP_FRAME_WIDTH), mVideoCapture->get(CV_CAP_PROP_FRAME_HEIGHT))
+						);
+
 		return mVideoCapture->get(CV_CAP_PROP_FRAME_COUNT);
 	}
 }
@@ -36,7 +42,7 @@ void HazeRemover::postProcess() {
 }
 
 void HazeRemover::gpuMemInit() {
-	coreMemInit(mInputImg.cols, mInputImg.rows, mInputImg.channels(), (float*) mInputImg.data);
+	coreMemInit(mInputImg.cols, mInputImg.rows, mInputImg.channels());
 	guidedMemInit();
 	softMattingMemInit();
 }
@@ -64,7 +70,14 @@ void HazeRemover::saveRefineImage() {
 void HazeRemover::saveDehazeImage() {
 	Mat dehazeImage = Mat::zeros(mInputImg.size(), CV_32FC3);
 	fillDehazeData((float*) dehazeImage.data);
-	imwrite("Dehaze.png", dehazeImage);	
+
+	if (mIsVideo) {
+		dehazeImage.convertTo(dehazeImage, CV_8UC3);
+		mVideoWriter->write(dehazeImage);
+	}
+	else {
+		imwrite("Dehaze.png", dehazeImage);	
+	}
 }
 
 void HazeRemover::dehaze() {
@@ -85,16 +98,20 @@ void HazeRemover::dehaze() {
 			isFirstLoop = false;
 		}
 		
+		setData((float*)mInputImg.data);
+
 		// Calculate Dark Channel
 		calcDarkChannel();
 #ifdef __DEBUG
 		saveDarkChannelImage();
 #endif
-		if (A == nullptr)
+
+		if (A == nullptr) {
 			A = new float[mInputImg.channels() * sizeof(float)];
 
-		// Calculate Air Light
-		calcAirLight(A, (float*) mInputImg.data);
+			// Calculate Air Light
+			calcAirLight(A, (float*) mInputImg.data);
+		}
 
 		// Calculate Transmisison
 		calcTransmission(A);
@@ -105,11 +122,15 @@ void HazeRemover::dehaze() {
 		saveTransmissionImage();
 #endif
 
-		refineTransmission();
+		if (mIsVideo) {
+			gRefineGPU = gTransPatchGPU;
+		} else {
+			refineTransmission();
 #ifdef __DEBUG
-		saveRefineImage();
-#endif
-
+			saveRefineImage();
+#endif	
+		}
+		
 		// Dehaze
 		doDehaze(A);
 		saveDehazeImage();	

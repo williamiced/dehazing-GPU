@@ -14,7 +14,7 @@
 
 #define CONTAINER_AMOUNT 10
 
-#define __DEBUG
+//#define __DEBUG
 
 #define CUDA_CHECK_RETURN(value) {											\
 	cudaError_t _m_cudaStat = value;										\

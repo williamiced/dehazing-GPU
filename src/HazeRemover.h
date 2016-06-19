@@ -25,6 +25,7 @@ private:
 	std::string mInputFilePath;
 	cv::Mat 	mInputImg;
 	cv::VideoCapture* mVideoCapture;
+	cv::VideoWriter* mVideoWriter;
 	bool		mIsVideo;
 
 public:

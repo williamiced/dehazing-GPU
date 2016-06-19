@@ -10,8 +10,9 @@
 
 #include "macro.h"
 
-void coreMemInit(int width, int height, int channels, float* rawData);
+void coreMemInit(int width, int height, int channels);
 void coreMemDestroy();
+void setData(float* data);
 void calcDarkChannel();
 void calcAirLight(float* A, float* rawData);
 void calcTransmission(float* A);

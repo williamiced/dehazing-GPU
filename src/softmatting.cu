@@ -11,6 +11,7 @@ int* 	gCsrColInd;
 float* 	gLapVal;
 int 	gRowEleCount;
 int 	gNNZ;
+cusolverSpHandle_t gSpSolver;
 
 __global__ void scaleImg(float* ori, float* out, int width, int channels, int height) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -151,8 +152,8 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 	if (i >= size || j >= size) 
 		return;
 
-	//if (i<j)
-	//	return;
+	if (i<j)
+		return;
 
 	// If distance of I and J is too large, that means there will be no window cover both I and J, so could be ignored
 	if (abs(ix-jx) >= window || abs(iy-jy) >= window) 
@@ -171,7 +172,6 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 
 	int count = 0;
 
-
 	for (int x = max(rightX - half, 1); x <= min(leftX + half, width-2); x++) {
 		for (int y = max(bottomY - half, 1); y <= min(topY + half, height-2); y++) {
 			count++;
@@ -183,25 +183,33 @@ __global__ void calcLaplacian(float* I, float* N, float* Mu, float* InvTerm, int
 			// [Ii_R	Ii_G	Ii_B]	x	[Inv_3	Inv_4	Inv_5]	x	[Ij_G]
 			//								[Inv_6	Inv_7	Inv_8]		[Ij_B]
 
-			float currentTerm = 0.f;
+			double currentTerm = 0.f;
 			for(int c1=0; c1<channels; c1++) {
-				float tmpVal = 0.f;
+				double tmpVal = 0.f;
 				for (int c2=0; c2<channels; c2++) 
-					tmpVal += (Ii[c2] - Mu[k*channels + c2]) * InvTerm[k*channelsSquare + c2*channels + c1];
-				currentTerm += tmpVal * (Ij[c1] - Mu[k*channels + c1]);
+					tmpVal += static_cast<double>(Ii[c2] - Mu[k*channels + c2]) * static_cast<double>(InvTerm[k*channelsSquare + c2*channels + c1]);
+				currentTerm += static_cast<double>(tmpVal) * static_cast<double>(Ij[c1] - Mu[k*channels + c1]);
 			}
-			total += delta - invWeight * ( 1 + currentTerm );
+			total += delta - invWeight * ( 1 + static_cast<float>(currentTerm) );
 		}
 	}
 
 	// Get location of L
 	for (int idx=csrRowPtr[i]; idx<csrRowPtr[i+1]; idx++) {
 		if (csrColInd[idx] == j) {
-			if (i == j)
+			if (i == j) {
 				L[idx] = PARAM_LAMBDA + total;
+				return;
+			}
 			else
 				L[idx] = total;
 			break;
+		} 
+	}
+	for (int idx=csrRowPtr[j]; idx<csrRowPtr[j+1]; idx++) {
+		if (csrColInd[idx] == i) {
+			L[idx] = total;
+			return;
 		} 
 	}
 }
@@ -278,6 +286,8 @@ void preCalcForSoftMatting() {
 	CUDA_CHECK_RETURN( cudaMemcpy(gCsrColInd, &colInd[0], sizeof(int) * gNNZ, cudaMemcpyHostToDevice) );
 
 	printf("gNNZ: %d\n", gNNZ);
+
+	assert( CUSOLVER_STATUS_SUCCESS == cusolverSpCreate(&gSpSolver) );
 }
 
 void show2Darray(float* arrGPU, int size, int width, int height, int channels) {
@@ -332,60 +342,7 @@ __global__ void multiplyLambda(float* T, int width, int height) {
 
 void solveLinearSystem() {
 	int m = gImgWidth * gImgHeight;
-	float alpha = (float) PARAM_LAMBDA;
-
-	/*
-	cusparseHandle_t cuSparseHandle;
-	cusparseMatDescr_t descr;
-	cusparseSolveAnalysisInfo_t info;
-
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreate (&cuSparseHandle) );
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreateMatDescr (&descr) );
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatFillMode (descr, CUSPARSE_FILL_MODE_LOWER) );
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatIndexBase (descr, CUSPARSE_INDEX_BASE_ZERO) );
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseSetMatType (descr, CUSPARSE_MATRIX_TYPE_TRIANGULAR) );
-	assert( CUSPARSE_STATUS_SUCCESS == cusparseCreateSolveAnalysisInfo (&info) );
-
-	cudaMemset(gRefineGPU, 0.f, sizeof(float) * m);
-
-	cusparseStatus_t status;
-	status = cusparseScsrsv_analysis(cuSparseHandle, 
-		CUSPARSE_OPERATION_NON_TRANSPOSE,
-		m, // m
-		gNNZ, // nnz
-		descr, // cusparseMatDescr_t
-		gLapVal,
-		gCsrRowPtr,
-		gCsrColInd,
-		info
-	);
-
-	if (status != CUSPARSE_STATUS_SUCCESS) {
-		printf("Analysis error\n");
-		exit(-1);
-	}
-	CHECK
-
-	status = cusparseScsrsv_solve(cuSparseHandle, 
-		CUSPARSE_OPERATION_NON_TRANSPOSE,
-		m, // m
-		&alpha, // alpha
-		descr,
-		gLapVal,
-		gCsrRowPtr,
-		gCsrColInd,
-		info, 
-		gTransPatchGPU, // b
-		gRefineGPU // X
-	);
-	CHECK
-
-	if (status != CUSPARSE_STATUS_SUCCESS) {
-		printf("Solve error %d\n", status);
-		exit(-1);
-	}
-	*/
-	
+		
 	dim3 bdim(BLOCK_DIM, BLOCK_DIM);
 	int grid_size_x = CEIL(double(gImgWidth) / BLOCK_DIM);
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
@@ -393,9 +350,6 @@ void solveLinearSystem() {
 
 	multiplyLambda<<<gdim, bdim>>>(gTransPatchGPU, gImgWidth, gImgHeight);
 
-	cusolverSpHandle_t gSpSolver;
-	assert( CUSOLVER_STATUS_SUCCESS == cusolverSpCreate(&gSpSolver) );
-	
 	cudaMemset(gRefineGPU, 0.f, m * sizeof(float));
 	
 	cusparseMatDescr_t descr;
@@ -415,7 +369,6 @@ void solveLinearSystem() {
 	cudaMemcpy(cpuColInd, gCsrColInd, sizeof(int) * gNNZ, cudaMemcpyDeviceToHost);
 	cudaMemcpy(cpuB, gTransPatchGPU, sizeof(float) * m, cudaMemcpyDeviceToHost);
 	
-	/*
 	cusolverSpScsrlsvluHost(gSpSolver,
 		m, 
 		gNNZ, 
@@ -428,9 +381,11 @@ void solveLinearSystem() {
 		0,
 		cpuX,
 		&singularity);
-	*/	
-	//cudaMemcpy(gRefineGPU, cpuX, sizeof(float) * m, cudaMemcpyHostToDevice);
 	
+	cudaMemcpy(gRefineGPU, cpuX, sizeof(float) * m, cudaMemcpyHostToDevice);
+
+	/*
+	//cusolverSpScsrlsvchol(gSpSolver, 
 	cusolverSpScsrlsvqr(gSpSolver, 
 		m, // n
 		gNNZ, // nnzA
@@ -443,9 +398,26 @@ void solveLinearSystem() {
 		0, // reorder
 		gRefineGPU, 
 		&singularity);
-	
+	*/
+	//showLaplacian();
+}
 
-	showLaplacian();
+void dumpToFile(float* gpu, int size, int channels, std::string filename, bool dumpBoundary) {
+	float* cpu = (float*) malloc (sizeof(float) * size * channels);
+	cudaMemcpy(cpu, gpu, sizeof(float) * size * channels, cudaMemcpyDeviceToHost);
+	FILE* fp = fopen(filename.c_str(), "w+");
+	for (int i=0; i<size; i++) {
+		if (!dumpBoundary) {
+			int ix = i % gImgWidth;
+			int iy = i / gImgWidth;	
+			if (ix <= 0 || iy <= 0 || ix >= gImgWidth-1 || iy >= gImgHeight-1)
+				continue;
+		}
+		for (int c=channels-1; c>=0; c--)
+				fprintf(fp, "%f\n", cpu[i * channels + c]);
+	}
+	fclose(fp);
+	free(cpu);
 }
 
 void refineTransmission() {
@@ -456,6 +428,7 @@ void refineTransmission() {
 	int grid_size_y = CEIL(double(gImgHeight) / BLOCK_DIM);
 	dim3 gdim(grid_size_x, grid_size_y);
 
+	
 	scaleImg<<<gdim, bdim>>>(gImgGPU, gImgScaleGPU, gImgWidth, gImgHeight, gImgChannels);
 	CHECK
 
@@ -472,33 +445,6 @@ void refineTransmission() {
 	calcInvCovTermDouble<<<gdim, bdim>>>(gCovI, gInvCovI, gN, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
 
-	/*
-	int size = gImgWidth * gImgHeight * gImgChannels * gImgChannels;
-	float* cpu = (float*)malloc(sizeof(float) * size);
-	cudaMemcpy(cpu, gInvCovI, sizeof(float) * size, cudaMemcpyDeviceToHost);
-	FILE* fp = fopen("MyInv.txt", "w+");
-	for (int i=0; i<size; i++) {
-		int ix = i % gImgWidth;
-		int iy = i / gImgWidth;
-		if (ix > 0 && ix < gImgWidth-1 && iy > 0 && iy < gImgHeight-1) {
-			for (int t=0;t<9; t++)
-				fprintf(fp, "%f\n", cpu[i*9 + t]);
-		}
-	}
-	fclose(fp);
-	
-	cudaMemcpy(cpu, gCovI, sizeof(float) * size, cudaMemcpyDeviceToHost);
-	FILE* fp2 = fopen("MyCov.txt", "w+");
-	for (int i=0; i<size; i++) {
-		int ix = i % gImgWidth;
-		int iy = i / gImgWidth;
-		if (ix > 0 && ix < gImgWidth-1 && iy > 0 && iy < gImgHeight-1)
-			for (int t=0; t<9; t++)
-				fprintf(fp2, "%f\n", cpu[i*9 + t]);
-	}
-	fclose(fp2);
-	*/
-
 	CUDA_CHECK_RETURN( cudaMemset(gLapVal, 0.f, sizeof(float) * gNNZ) );
 
 	dim3 bdim_Lap(BLOCK_DIM, BLOCK_DIM);
@@ -506,7 +452,7 @@ void refineTransmission() {
 	dim3 gdim_Lap(gridSize, gridSize);
 	calcLaplacian<<<gdim_Lap, bdim_Lap>>>(gImgScaleGPU, gN, gMeanI, gInvCovI, gCsrRowPtr, gCsrColInd, gLapVal, gImgWidth, gImgHeight, gImgChannels, WINDOW_SM);
 	CHECK
-
+	
 	solveLinearSystem();
 }
 
